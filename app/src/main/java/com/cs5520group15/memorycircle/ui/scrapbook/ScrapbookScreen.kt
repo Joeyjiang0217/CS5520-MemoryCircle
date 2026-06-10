@@ -133,10 +133,11 @@ fun ScrapbookScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = InkSecondary
                 )
-                // Wrap tags in a FlowRow-style layout
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Existing tags wrap onto multiple lines as needed
+                FlowRow(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement   = Arrangement.spacedBy(8.dp)
                 ) {
                     tags.forEach { tag ->
                         TagChip(
@@ -144,15 +145,26 @@ fun ScrapbookScreen(
                             onRemove  = { viewModel.onRemoveTag(tag) }
                         )
                     }
-                    // Add tag chip
-                    if (showAddTag) {
+                    if (!showAddTag) {
+                        AddTagChip(onClick = { showAddTag = true })
+                    }
+                }
+
+                // Tag input gets its own full-width row so the typed text is
+                // never clipped (no forced height/width on the text field).
+                if (showAddTag) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
                         OutlinedTextField(
                             value         = newTagInput,
                             onValueChange = { newTagInput = it },
-                            modifier      = Modifier.width(120.dp).height(40.dp),
+                            modifier      = Modifier.weight(1f),
                             shape         = RoundedCornerShape(20.dp),
                             singleLine    = true,
-                            placeholder   = { Text("tag", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder   = { Text("Enter a tag", style = MaterialTheme.typography.bodyMedium) },
                             colors        = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor   = Sage,
                                 unfocusedBorderColor = Beige
@@ -165,8 +177,6 @@ fun ScrapbookScreen(
                         }) {
                             Text("Add", color = AccentGreen)
                         }
-                    } else {
-                        AddTagChip(onClick = { showAddTag = true })
                     }
                 }
             }
