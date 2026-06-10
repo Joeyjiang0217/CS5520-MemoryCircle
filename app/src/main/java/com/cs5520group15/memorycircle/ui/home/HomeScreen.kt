@@ -24,10 +24,10 @@ import com.cs5520group15.memorycircle.ui.theme.*
  */
 @Composable
 fun HomeScreen(
-    currentRoute:       String,
-    onNavigate:         (Any) -> Unit,
-    onCreateScrapbook:  (String) -> Unit,
-    viewModel: HomeViewModel = viewModel()
+    currentRoute:   String,
+    onNavigate:     (Any) -> Unit,
+    onGoToMemories: () -> Unit,
+    viewModel:      HomeViewModel = viewModel()
 ) {
     val groups   by viewModel.groups.collectAsStateWithLifecycle()
     val userName by viewModel.userName.collectAsStateWithLifecycle()
@@ -42,13 +42,13 @@ fun HomeScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick            = { onCreateScrapbook("new") },
-                containerColor     = Ink,
-                contentColor       = Cream
+                onClick        = { onGoToMemories() },
+                containerColor = Ink,
+                contentColor   = Cream
             ) {
                 Icon(
                     painter            = painterResource(R.drawable.ic_add),
-                    contentDescription = "Create new group"
+                    contentDescription = "Go to Memories"
                 )
             }
         }
@@ -63,9 +63,9 @@ fun HomeScreen(
 
             // Greeting row
             Row(
-                modifier            = Modifier.fillMaxWidth(),
+                modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment   = Alignment.Top
+                verticalAlignment     = Alignment.Top
             ) {
                 Column {
                     Text(
@@ -118,7 +118,7 @@ fun HomeScreen(
                 items(groups, key = { it.id }) { group ->
                     GroupCard(
                         group    = group,
-                        onClick  = { onCreateScrapbook(group.id) },
+                        onClick  = { onGoToMemories() },
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -132,9 +132,9 @@ fun HomeScreen(
 fun HomeScreenPreview() {
     MemoryCircleTheme {
         HomeScreen(
-            currentRoute      = "home",
-            onNavigate        = {},
-            onCreateScrapbook = {}
+            currentRoute   = "home",
+            onNavigate     = {},
+            onGoToMemories = {}
         )
     }
 }

@@ -12,7 +12,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.ui.theme.MemoryCircleTheme
 import com.cs5520group15.memorycircle.ui.theme.Brown
-import com.cs5520group15.memorycircle.ui.theme.Ink
 import com.cs5520group15.memorycircle.ui.theme.Beige
 
 /**
@@ -21,9 +20,9 @@ import com.cs5520group15.memorycircle.ui.theme.Beige
  * When: Instantiated when defining the list of nav items.
  */
 data class BottomNavItem(
-    val label: String,
-    val iconRes: Int,
-    val route: String
+    val label:    String,
+    val iconRes:  Int,
+    val route:    String
 )
 
 /**
@@ -34,7 +33,7 @@ data class BottomNavItem(
 @Composable
 fun MemoryCircleBottomNav(
     currentRoute: String,
-    onNavigate: (String) -> Unit
+    onNavigate:   (String) -> Unit
 ) {
     val items = listOf(
         BottomNavItem("Home",     R.drawable.ic_home,    "home"),
@@ -49,17 +48,20 @@ fun MemoryCircleBottomNav(
     ) {
         items.forEach { item ->
             NavigationBarItem(
-                selected = currentRoute == item.route,
+                // Use contains() because currentRoute is a full class path
+                // e.g. "com.cs5520group15.memorycircle.ui.navigation.Home"
+                // so we just check if it contains "home", "memories", etc.
+                selected = currentRoute.contains(item.route, ignoreCase = true),
                 onClick  = { onNavigate(item.route) },
                 icon = {
                     Icon(
-                        painter = painterResource(id = item.iconRes),
+                        painter            = painterResource(id = item.iconRes),
                         contentDescription = item.label
                     )
                 },
                 label = {
                     Text(
-                        text = item.label,
+                        text  = item.label,
                         style = MaterialTheme.typography.labelSmall
                     )
                 },

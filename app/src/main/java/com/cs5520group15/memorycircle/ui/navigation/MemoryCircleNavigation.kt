@@ -13,6 +13,7 @@ import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
+import com.cs5520group15.memorycircle.ui.memories.MemoriesScreen
 
 /**
  * What: Sets up the entire navigation graph for the app.
@@ -31,6 +32,28 @@ fun MemoryCircleNavigation() {
     // We use this to highlight the correct tab in the bottom nav bar
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: ""
+
+    // The bottom nav bar emits plain String routes ("home", "memories", ...).
+    // This app uses type-safe routes (Serializable objects), so we must map the
+    // String to its destination object before navigating. Passing the raw String
+    // to navController.navigate() does NOT match any destination and crashes.
+    // Unregistered tabs (friends/profile) map to null and are ignored for now.
+    val onTabSelected: (Any) -> Unit = { route ->
+        val destination: Any? = when (route) {
+            "home"     -> Home
+            "memories" -> Memories
+            else       -> null
+        }
+        if (destination != null) {
+            navController.navigate(destination) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState    = true
+            }
+        }
+    }
 
     NavHost(
         navController    = navController,
@@ -72,19 +95,10 @@ fun MemoryCircleNavigation() {
         // Passes currentRoute so BottomNav knows which tab to highlight
         composable<Home> {
             HomeScreen(
-                currentRoute = currentRoute,
-                onNavigate   = { route ->
-                    navController.navigate(route) {
-                        // Keeps the back stack clean when switching tabs
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState    = true
-                    }
-                },
-                onCreateScrapbook = { groupId ->
-                    navController.navigate(ScrapbookDetail(groupId))
+                currentRoute   = currentRoute,
+                onNavigate     = onTabSelected,
+                onGoToMemories = {
+                    navController.navigate(Memories)
                 }
             )
         }
@@ -109,6 +123,21 @@ fun MemoryCircleNavigation() {
             ScrapbookViewerScreen(
                 groupId = detail.groupId,
                 onBack  = { navController.popBackStack() }
+            )
+        }
+
+        composable<Memories> {
+            MemoriesScreen(
+                currentRoute    = currentRoute,
+                onNavigate      = onTabSelected,
+                onOpenScrapbook = { groupId ->
+                    // Tap an existing scrapbook → view its generated pages
+                    navController.navigate(ScrapbookViewer(groupId))
+                },
+                onCreateNew     = {
+                    // The "+" FAB starts a brand-new scrapbook for a new month
+                    navController.navigate(ScrapbookDetail("new"))
+                }
             )
         }
     }

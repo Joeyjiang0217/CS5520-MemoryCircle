@@ -6,11 +6,7 @@ plugins {
 
 android {
     namespace = "com.cs5520group15.memorycircle"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.cs5520group15.memorycircle"

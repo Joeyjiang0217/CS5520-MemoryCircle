@@ -15,14 +15,15 @@ class HomeViewModel : ViewModel() {
     // --- Data Models ---
 
     /**
-     * What: Represents a single memory group card displayed on the Home screen.
+     * What: Represents a single memory group (a group of people) on the Home screen.
+     *       A group is NOT an event — it's a circle of people who share memories.
      * Who: Used by HomeViewModel and HomeScreen.
-     * When: Instantiated when loading the list of recent groups.
+     * When: Instantiated when loading the list of groups.
      */
     data class Group(
         val id:          String,
-        val name:        String,
-        val date:        String,
+        val name:        String,  // e.g. "Group 1" — the circle's name, not an event
+        val date:        String,  // subtitle line, e.g. member summary / created date
         val memoryCount: Int,
         val colorType:   String  // "brown" or "sage" — controls card gradient color
     )
@@ -48,9 +49,9 @@ class HomeViewModel : ViewModel() {
      */
     private fun loadDummyGroups() {
         _groups.value = listOf(
-            Group("1", "Summer Picnic",  "June 1, 2025",  12, "brown"),
-            Group("2", "Garden Walk",    "May 28, 2025",   5, "sage"),
-            Group("3", "Beach Trip",     "May 10, 2025",   8, "brown")
+            Group("1", "Group 1", "4 members", 12, "brown"),
+            Group("2", "Group 2", "3 members",  5, "sage"),
+            Group("3", "Group 3", "6 members",  8, "brown")
         )
     }
 }
