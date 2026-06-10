@@ -12,13 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleBottomNav
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
@@ -26,8 +23,9 @@ import com.cs5520group15.memorycircle.ui.theme.*
 /**
  * What: Memories tab screen shown as a calendar.
  *       Scrapbooks are generated per month, so they are grouped under each month
- *       (e.g. January → Group 1, Group 2 scrapbooks). The "+" FAB starts a new
- *       scrapbook for a new month, which opens ScrapbookScreen.
+ *       (e.g. January → Group 1, Group 2 scrapbooks). This tab is read-only —
+ *       tapping a scrapbook opens its timeline; new memories are created from a
+ *       group's timeline, not here.
  * Who: Called by MemoryCircleNavigation when the user taps the Memories tab.
  * When: Displayed when the Memories tab is active in the bottom nav.
  */
@@ -36,7 +34,6 @@ fun MemoriesScreen(
     currentRoute:    String,
     onNavigate:      (Any) -> Unit,
     onOpenScrapbook: (String) -> Unit,
-    onCreateNew:     () -> Unit,
     viewModel:       MemoriesViewModel = viewModel()
 ) {
     val months by viewModel.months.collectAsStateWithLifecycle()
@@ -51,19 +48,6 @@ fun MemoriesScreen(
                 currentRoute = currentRoute,
                 onNavigate   = onNavigate
             )
-        },
-        floatingActionButton = {
-            // "+" button — generate a new scrapbook for a new month (→ ScrapbookScreen)
-            FloatingActionButton(
-                onClick        = { onCreateNew() },
-                containerColor = Ink,
-                contentColor   = Cream
-            ) {
-                Icon(
-                    painter            = painterResource(R.drawable.ic_add),
-                    contentDescription = "New scrapbook"
-                )
-            }
         }
     ) { padding ->
         LazyColumn(
@@ -203,8 +187,7 @@ fun MemoriesScreenPreview() {
         MemoriesScreen(
             currentRoute    = "memories",
             onNavigate      = {},
-            onOpenScrapbook = {},
-            onCreateNew     = {}
+            onOpenScrapbook = {}
         )
     }
 }

@@ -139,12 +139,8 @@ fun MemoryCircleNavigation() {
                 currentRoute    = currentRoute,
                 onNavigate      = onTabSelected,
                 onOpenScrapbook = { groupId ->
-                    // Tap an existing scrapbook → view its timeline
+                    // Tap an existing scrapbook → view its timeline (read-only tab)
                     navController.navigate(ScrapbookViewer(groupId))
-                },
-                onCreateNew     = {
-                    // The "+" FAB starts a brand-new scrapbook for a new month
-                    navController.navigate(ScrapbookDetail("new"))
                 }
             )
         }
