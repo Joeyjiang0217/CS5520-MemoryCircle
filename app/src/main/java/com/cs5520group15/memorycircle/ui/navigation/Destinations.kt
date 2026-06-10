@@ -23,3 +23,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class ScrapbookDetail(val groupId: String)
 
 @Serializable object Memories
+
+// Create-a-new-group flow (pick contacts) — opened from the Home "+" FAB
+@Serializable object CreateGroup

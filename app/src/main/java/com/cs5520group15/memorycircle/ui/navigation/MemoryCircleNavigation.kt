@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
+import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
@@ -95,10 +96,14 @@ fun MemoryCircleNavigation() {
         // Passes currentRoute so BottomNav knows which tab to highlight
         composable<Home> {
             HomeScreen(
-                currentRoute   = currentRoute,
-                onNavigate     = onTabSelected,
-                onGoToMemories = {
-                    navController.navigate(Memories)
+                currentRoute  = currentRoute,
+                onNavigate    = onTabSelected,
+                onCreateGroup = {
+                    // Home "+" → pick contacts to create a new group
+                    navController.navigate(CreateGroup)
+                },
+                onOpenGroup   = { _ ->
+                    // Opening a group's detail page is owned by a teammate — no-op for now
                 }
             )
         }
@@ -138,6 +143,13 @@ fun MemoryCircleNavigation() {
                     // The "+" FAB starts a brand-new scrapbook for a new month
                     navController.navigate(ScrapbookDetail("new"))
                 }
+            )
+        }
+
+        // Create-a-new-group screen (contact picker) — placeholder for now
+        composable<CreateGroup> {
+            CreateGroupScreen(
+                onBack = { navController.popBackStack() }
             )
         }
     }

@@ -26,7 +26,8 @@ import com.cs5520group15.memorycircle.ui.theme.*
 fun HomeScreen(
     currentRoute:   String,
     onNavigate:     (Any) -> Unit,
-    onGoToMemories: () -> Unit,
+    onCreateGroup:  () -> Unit,
+    onOpenGroup:    (String) -> Unit,
     viewModel:      HomeViewModel = viewModel()
 ) {
     val groups   by viewModel.groups.collectAsStateWithLifecycle()
@@ -42,13 +43,13 @@ fun HomeScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick        = { onGoToMemories() },
+                onClick        = { onCreateGroup() },
                 containerColor = Ink,
                 contentColor   = Cream
             ) {
                 Icon(
                     painter            = painterResource(R.drawable.ic_add),
-                    contentDescription = "Go to Memories"
+                    contentDescription = "Create new group"
                 )
             }
         }
@@ -118,7 +119,7 @@ fun HomeScreen(
                 items(groups, key = { it.id }) { group ->
                     GroupCard(
                         group    = group,
-                        onClick  = { onGoToMemories() },
+                        onClick  = { onOpenGroup(group.id) },
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -134,7 +135,8 @@ fun HomeScreenPreview() {
         HomeScreen(
             currentRoute   = "home",
             onNavigate     = {},
-            onGoToMemories = {}
+            onCreateGroup  = {},
+            onOpenGroup    = {}
         )
     }
 }
