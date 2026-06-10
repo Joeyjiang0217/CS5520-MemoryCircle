@@ -16,12 +16,13 @@ import kotlinx.serialization.Serializable
 @Serializable object Friends
 @Serializable object Profile
 
-// memberCount drives how many member photos appear at each timeline date
-@Serializable data class ScrapbookViewer(val groupId: String, val memberCount: Int)
+// Opens a group's collaborative timeline of memory time points
+@Serializable data class ScrapbookViewer(val groupId: String)
 
 // data class = a route that carries arguments
-// Used for screens that need data to know what to display
-@Serializable data class ScrapbookDetail(val groupId: String)
+// entryId == null  → create a brand-new time point
+// entryId != null  → join (add my photo + description to) an existing time point
+@Serializable data class ScrapbookDetail(val groupId: String, val entryId: String? = null)
 
 @Serializable object Memories
 

@@ -102,32 +102,35 @@ fun MemoryCircleNavigation() {
                     // Home "+" → pick contacts to create a new group
                     navController.navigate(CreateGroup)
                 },
-                onOpenGroup   = { _ ->
-                    // Opening a group's detail page is owned by a teammate — no-op for now
+                onOpenGroup   = { groupId ->
+                    // Tap a group card → open that group's collaborative timeline
+                    navController.navigate(ScrapbookViewer(groupId))
                 }
             )
         }
 
-        // Scrapbook creation screen
-        // onGenerate → navigate to the timeline viewer with the chosen group size
+        // Scrapbook creation screen — create a new time point or join an existing one
+        // onSaved → pop back to the timeline, which re-collects the updated entries
         composable<ScrapbookDetail> { entry ->
             val detail = entry.toRoute<ScrapbookDetail>()
             ScrapbookScreen(
-                groupId    = detail.groupId,
-                onBack     = { navController.popBackStack() },
-                onGenerate = { memberCount ->
-                    navController.navigate(ScrapbookViewer(detail.groupId, memberCount))
-                }
+                groupId = detail.groupId,
+                entryId = detail.entryId,
+                onBack  = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
 
-        // Scrapbook viewer screen — monthly timeline with one photo per member
+        // Scrapbook viewer — a group's collaborative timeline of memory time points
         composable<ScrapbookViewer> { entry ->
             val detail = entry.toRoute<ScrapbookViewer>()
             ScrapbookViewerScreen(
-                groupId     = detail.groupId,
-                memberCount = detail.memberCount,
-                onBack      = { navController.popBackStack() }
+                groupId        = detail.groupId,
+                onBack         = { navController.popBackStack() },
+                onAddTimePoint = { navController.navigate(ScrapbookDetail(detail.groupId)) },
+                onJoinEntry    = { entryId ->
+                    navController.navigate(ScrapbookDetail(detail.groupId, entryId))
+                }
             )
         }
 
@@ -136,8 +139,8 @@ fun MemoryCircleNavigation() {
                 currentRoute    = currentRoute,
                 onNavigate      = onTabSelected,
                 onOpenScrapbook = { groupId ->
-                    // Tap an existing scrapbook → view its timeline (default group size)
-                    navController.navigate(ScrapbookViewer(groupId, 4))
+                    // Tap an existing scrapbook → view its timeline
+                    navController.navigate(ScrapbookViewer(groupId))
                 },
                 onCreateNew     = {
                     // The "+" FAB starts a brand-new scrapbook for a new month

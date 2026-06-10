@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -20,29 +19,33 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
- * What: Displays one month's scrapbook as a vertical timeline. Each entry sits
- *       on a continuous left-hand line marked by a Brown dot and its date, with
- *       a card on the right showing the member photos, an editable title and
- *       description, the mood, and group comments.
- * Who: Called by MemoryCircleNavigation when viewing a scrapbook (ScrapbookViewer route).
- * When: Navigated to from the Memories tab or after generating a scrapbook.
+ * What: Displays one group's collaborative timeline. Each time point sits on a
+ *       continuous left-hand line marked by a Brown dot and its date, with a card
+ *       on the right showing every member's photo + avatar + name + their own
+ *       description, an editable title, group comments, and an "Add my photo" CTA.
+ *       A FAB adds a brand-new time point.
+ * Who: Called by MemoryCircleNavigation for the ScrapbookViewer route.
+ * When: Opened from a Home group card or the Memories tab.
  */
 @Composable
 fun ScrapbookViewerScreen(
-    groupId:     String,
-    memberCount: Int,
-    onBack:      () -> Unit,
-    viewModel:   ScrapbookViewerViewModel = viewModel()
+    groupId:        String,
+    onBack:         () -> Unit,
+    onAddTimePoint: () -> Unit,
+    onJoinEntry:    (String) -> Unit,
+    viewModel:      ScrapbookViewerViewModel = viewModel()
 ) {
-    // Load once (mock data for now); in-memory edits/comments survive recompositions.
-    LaunchedEffect(groupId, memberCount) {
-        viewModel.loadIfNeeded(groupId, memberCount)
-    }
-    val entries by viewModel.entries.collectAsStateWithLifecycle()
+    LaunchedEffect(groupId) { viewModel.bind(groupId) }
+
+    // Collect the shared repository flow directly so created/joined contributions
+    // and posted comments show up immediately.
+    val entriesFlow = remember(groupId) { ScrapbookRepository.entriesFor(groupId) }
+    val entries by entriesFlow.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -52,6 +55,15 @@ fun ScrapbookViewerScreen(
                 showBack = true,
                 onBack   = onBack
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick        = onAddTimePoint,
+                containerColor = Ink,
+                contentColor   = Cream
+            ) {
+                Text("+", style = MaterialTheme.typography.headlineSmall)
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -64,9 +76,10 @@ fun ScrapbookViewerScreen(
             // bottom padding so the timeline line stays continuous between entries.
             items(entries, key = { it.id }) { entry ->
                 TimelineEntry(
-                    entry        = entry,
-                    onSaveText   = { title, desc -> viewModel.updateEntryText(entry.id, title, desc) },
-                    onPostComment = { text -> viewModel.addComment(entry.id, author = "You", text = text) }
+                    entry         = entry,
+                    onSaveTitle   = { title -> viewModel.updateEntryTitle(entry.id, title) },
+                    onPostComment = { text -> viewModel.addComment(entry.id, author = CurrentUser.name, text = text) },
+                    onJoin        = { onJoinEntry(entry.id) }
                 )
             }
         }
@@ -77,17 +90,15 @@ fun ScrapbookViewerScreen(
  * What: One timeline row — a continuous vertical line + dot + date on the left,
  *       and the memory card on the right.
  * Who: Called by ScrapbookViewerScreen for each entry.
- * When: Rendered for every entry in the month.
+ * When: Rendered for every time point in the month.
  */
 @Composable
 private fun TimelineEntry(
     entry:         ScrapbookEntry,
-    onSaveText:    (String, String) -> Unit,
-    onPostComment: (String) -> Unit
+    onSaveTitle:   (String) -> Unit,
+    onPostComment: (String) -> Unit,
+    onJoin:        () -> Unit
 ) {
-    // The continuous line is drawn in a background layer that matches the row's
-    // height via matchParentSize(). This avoids IntrinsicSize, which OutlinedTextField
-    // (used in edit mode) does not support.
     Box(modifier = Modifier.fillMaxWidth()) {
 
         // --- Background: continuous vertical line in the 72dp left gutter ---
@@ -109,7 +120,6 @@ private fun TimelineEntry(
 
         // --- Foreground: left gutter (dot + date) + memory card ---
         Row(modifier = Modifier.fillMaxWidth()) {
-            // Dot + date, vertically centered with the card
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier            = Modifier
@@ -131,11 +141,11 @@ private fun TimelineEntry(
                 )
             }
 
-            // Memory card. Bottom padding = spacing to next entry (line spans it too).
             MemoryCard(
                 entry         = entry,
-                onSaveText    = onSaveText,
+                onSaveTitle   = onSaveTitle,
                 onPostComment = onPostComment,
+                onJoin        = onJoin,
                 modifier      = Modifier
                     .weight(1f)
                     .padding(start = 12.dp, bottom = 20.dp)
@@ -145,22 +155,22 @@ private fun TimelineEntry(
 }
 
 /**
- * What: The card for a single memory — member photos, an editable title and
- *       description, the mood chip, and the group comment thread.
+ * What: The card for a single time point — an editable title, each member's
+ *       contribution (photo + avatar + name + their own description), an
+ *       "Add my photo" CTA, and the group comment thread.
  * Who: Called by TimelineEntry.
- * When: Rendered for every entry.
+ * When: Rendered for every time point.
  */
 @Composable
 private fun MemoryCard(
     entry:         ScrapbookEntry,
-    onSaveText:    (String, String) -> Unit,
+    onSaveTitle:   (String) -> Unit,
     onPostComment: (String) -> Unit,
+    onJoin:        () -> Unit,
     modifier:      Modifier = Modifier
 ) {
-    // Per-entry local UI state (keyed by id so it resets if the list changes)
     var isEditing    by remember(entry.id) { mutableStateOf(false) }
     var titleInput   by remember(entry.id) { mutableStateOf(entry.title) }
-    var descInput    by remember(entry.id) { mutableStateOf(entry.description) }
     var commentInput by remember(entry.id) { mutableStateOf("") }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -174,36 +184,26 @@ private fun MemoryCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors    = CardDefaults.cardColors(containerColor = Cream)
     ) {
-        // One photo per member — laid out as a grid so every member's photo
-        // stays clearly visible regardless of group size.
-        MemberPhotoGrid(
-            photos   = entry.memberPhotos,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        )
+        Column(modifier = Modifier.padding(12.dp)) {
 
-        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-
-            // Header: member count + Edit/Done toggle (pen icon as ✏️)
+            // Header: member count + Edit/Done toggle for the title
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 Text(
-                    text  = "👥 ${entry.memberPhotos.size} members",
+                    text  = "👥 ${entry.contributions.size} members",
                     style = MaterialTheme.typography.labelSmall,
                     color = Brown
                 )
                 TextButton(
                     onClick = {
                         if (isEditing) {
-                            onSaveText(titleInput, descInput)
+                            onSaveTitle(titleInput)
                             isEditing = false
                         } else {
                             titleInput = entry.title
-                            descInput  = entry.description
                             isEditing  = true
                         }
                     },
@@ -219,7 +219,7 @@ private fun MemoryCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Title + description: read-only text, or editable fields in edit mode
+            // Title: read-only, or editable in edit mode
             if (isEditing) {
                 OutlinedTextField(
                     value         = titleInput,
@@ -230,45 +230,42 @@ private fun MemoryCard(
                     shape         = RoundedCornerShape(12.dp),
                     colors        = fieldColors
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value         = descInput,
-                    onValueChange = { descInput = it },
-                    modifier      = Modifier.fillMaxWidth(),
-                    label         = { Text("Content") },
-                    shape         = RoundedCornerShape(12.dp),
-                    colors        = fieldColors
-                )
             } else {
                 Text(
                     text  = entry.title,
                     style = MaterialTheme.typography.titleLarge,
                     color = Ink
                 )
-                if (entry.description.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text  = entry.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Ink
-                    )
+            }
+
+            // Tags
+            if (entry.tags.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text  = entry.tags.joinToString("  "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentGreen
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Each member's contribution: photo + avatar + name + their own description
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                entry.contributions.forEach { contribution ->
+                    ContributionBlock(contribution)
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Mood chip
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(AccentGreen)
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            // CTA: join this time point with your own photo + description
+            OutlinedButton(
+                onClick  = onJoin,
+                modifier = Modifier.fillMaxWidth(),
+                shape    = RoundedCornerShape(20.dp)
             ) {
-                Text(
-                    text  = entry.mood,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White
-                )
+                Text("➕  Add my photo", color = AccentGreen)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -291,9 +288,7 @@ private fun MemoryCard(
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    entry.comments.forEach { comment ->
-                        CommentRow(comment)
-                    }
+                    entry.comments.forEach { comment -> CommentRow(comment) }
                 }
             }
 
@@ -326,6 +321,45 @@ private fun MemoryCard(
 }
 
 /**
+ * What: One member's contribution — their photo above a row of their avatar, name,
+ *       and their own description.
+ * Who: Called by MemoryCard for each contribution on a time point.
+ * When: Rendered for every member who has joined the time point.
+ */
+@Composable
+private fun ContributionBlock(contribution: MemberContribution) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AsyncImage(
+            model              = contribution.photoUri,
+            contentDescription = "${contribution.memberName}'s photo",
+            contentScale       = ContentScale.Crop,
+            modifier           = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        Row(verticalAlignment = Alignment.Top) {
+            AvatarCircle(name = contribution.memberName, size = 28.dp)
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text  = contribution.memberName,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = Brown
+                )
+                if (contribution.description.isNotBlank()) {
+                    Text(
+                        text  = contribution.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Ink
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * What: A single comment line — author in bold followed by their text.
  * Who: Called by MemoryCard for each comment.
  * When: Rendered for every comment on an entry.
@@ -347,60 +381,15 @@ private fun CommentRow(comment: Comment) {
     }
 }
 
-/**
- * What: Lays out one photo per group member in a grid sized to the count, so
- *       every member's photo stays large enough to see. Cells have a fixed
- *       height and crop to fill.
- * Who: Called by MemoryCard for each entry's member photos.
- * When: Rendered inside every memory card.
- */
-@Composable
-private fun MemberPhotoGrid(
-    photos:   List<String>,
-    modifier: Modifier = Modifier
-) {
-    if (photos.isEmpty()) return
-
-    // Fewer columns for small groups keeps photos big; cap at 3 for larger ones.
-    val columns = when (photos.size) {
-        1    -> 1
-        2, 4 -> 2
-        else -> 3   // 3, 5, 6
-    }
-
-    Column(
-        modifier            = modifier,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        photos.chunked(columns).forEach { rowPhotos ->
-            Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                rowPhotos.forEach { url ->
-                    AsyncImage(
-                        model              = url,
-                        contentDescription = "Member photo",
-                        contentScale       = ContentScale.Crop,
-                        modifier           = Modifier
-                            .weight(1f)
-                            .height(120.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-                }
-                // Keep cell widths aligned when the last row isn't full
-                repeat(columns - rowPhotos.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-        }
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 fun ScrapbookViewerScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookViewerScreen(groupId = "test", memberCount = 4, onBack = {})
+        ScrapbookViewerScreen(
+            groupId        = "test",
+            onBack         = {},
+            onAddTimePoint = {},
+            onJoinEntry    = {}
+        )
     }
 }

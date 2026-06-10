@@ -1,50 +1,31 @@
 package com.cs5520group15.memorycircle.ui.scrapbook
 
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What: Holds the editable state for one scrapbook's timeline — the entries with
- *       their (member-editable) titles/descriptions and member comments.
+ * What: Mediates the viewer's edits (title edits, comments) to the shared
+ *       ScrapbookRepository. The screen collects the repository's StateFlow
+ *       directly for display, so any mutation here propagates automatically.
  *       Edits live in memory for now; Firestore will persist them later.
  * Who: Used by ScrapbookViewerScreen.
- * When: Created when the viewer is displayed; loaded once per scrapbook.
+ * When: Created when the viewer is displayed; bound to a group on first load.
  */
 class ScrapbookViewerViewModel : ViewModel() {
 
-    private val _entries = MutableStateFlow<List<ScrapbookEntry>>(emptyList())
-    val entries: StateFlow<List<ScrapbookEntry>> = _entries.asStateFlow()
+    private var groupId: String? = null
 
-    private var initialized = false
-
-    /**
-     * What: Loads the timeline entries once (mock data for now).
-     * Who: Called by ScrapbookViewerScreen on first composition.
-     * When: Once per ViewModel; later calls are ignored so in-memory edits survive.
-     */
-    fun loadIfNeeded(groupId: String, memberCount: Int) {
-        if (initialized) return
-        _entries.value = ScrapbookMockData.getMockEntries(groupId, memberCount)
-        initialized = true
+    /** Binds this ViewModel to the group whose timeline is being viewed. */
+    fun bind(groupId: String) {
+        this.groupId = groupId
     }
 
     /**
-     * What: Updates an entry's title and description (any member can edit).
-     *       A blank title falls back to the existing one.
-     * Who: Called by ScrapbookViewerScreen when a member saves an edit.
+     * What: Updates an entry's title (any member can edit).
+     * Who: Called by ScrapbookViewerScreen when a member saves a title edit.
      * When: On tapping "Done" in edit mode.
      */
-    fun updateEntryText(entryId: String, title: String, description: String) {
-        _entries.value = _entries.value.map { entry ->
-            if (entry.id == entryId) {
-                entry.copy(
-                    title       = title.ifBlank { entry.title },
-                    description = description
-                )
-            } else entry
-        }
+    fun updateEntryTitle(entryId: String, title: String) {
+        groupId?.let { ScrapbookRepository.updateTitle(it, entryId, title) }
     }
 
     /**
@@ -53,16 +34,6 @@ class ScrapbookViewerViewModel : ViewModel() {
      * When: On tapping "Post".
      */
     fun addComment(entryId: String, author: String, text: String) {
-        if (text.isBlank()) return
-        _entries.value = _entries.value.map { entry ->
-            if (entry.id == entryId) {
-                val newComment = Comment(
-                    id     = "${entryId}_c${entry.comments.size + 1}",
-                    author = author,
-                    text   = text.trim()
-                )
-                entry.copy(comments = entry.comments + newComment)
-            } else entry
-        }
+        groupId?.let { ScrapbookRepository.addComment(it, entryId, author, text) }
     }
 }

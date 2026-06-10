@@ -1,11 +1,13 @@
 package com.cs5520group15.memorycircle.ui.scrapbook
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -14,51 +16,65 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.cs5520group15.memorycircle.R
+import coil.compose.AsyncImage
+import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
- * What: Scrapbook creation screen where users configure and generate a memory scrapbook.
- *       Includes collaborator selection, tags, template preview, journal entry, and generate button.
- * Who: Called by MemoryCircleNavigation when user taps a group card or the FAB on HomeScreen.
- * When: Displayed when navigating to ScrapbookDetail route.
+ * What: Screen for adding a memory. In new-entry mode the user sets a title, tags,
+ *       picks a photo from the album and writes their own description, creating a
+ *       new time point dated today. In join mode (entryId != null) the title + tags
+ *       are inherited and shown read-only, and the user only adds their own photo +
+ *       description to the existing time point.
+ * Who: Called by MemoryCircleNavigation for the ScrapbookDetail route.
+ * When: Opened from the timeline "+" FAB (new) or a card's "Add my photo" CTA (join).
  */
 @Composable
 fun ScrapbookScreen(
-    groupId:  String,
-    onBack:   () -> Unit,
-    onGenerate: (Int) -> Unit = {},
+    groupId:   String,
+    entryId:   String? = null,
+    onBack:    () -> Unit,
+    onSaved:   () -> Unit = {},
     viewModel: ScrapbookViewModel = viewModel()
 ) {
-    val selectedGroupId     by viewModel.selectedGroupId.collectAsStateWithLifecycle()
-    val selectedMemberCount by viewModel.selectedMemberCount.collectAsStateWithLifecycle()
-    val journalEntry        by viewModel.journalEntry.collectAsStateWithLifecycle()
-    val tags                by viewModel.tags.collectAsStateWithLifecycle()
+    LaunchedEffect(groupId, entryId) {
+        viewModel.loadIfNeeded(groupId, entryId)
+    }
+
+    val title       by viewModel.title.collectAsStateWithLifecycle()
+    val description by viewModel.description.collectAsStateWithLifecycle()
+    val tags        by viewModel.tags.collectAsStateWithLifecycle()
+    val photoUri    by viewModel.selectedPhotoUri.collectAsStateWithLifecycle()
+
+    val isJoinMode = viewModel.isJoinMode
+    val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM d", Locale.ENGLISH)) }
 
     var newTagInput by remember { mutableStateOf("") }
     var showAddTag  by remember { mutableStateOf(false) }
 
-    // If we arrived from a specific group card, pre-select that group.
-    // The Memories "+" flow passes "new", which matches nothing, so nothing is preselected.
-    LaunchedEffect(groupId) {
-        if (viewModel.availableGroups.any { it.id == groupId }) {
-            viewModel.onSelectGroup(groupId)
-        }
-    }
+    // Android Photo Picker — no runtime permission needed.
+    val pickPhoto = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) viewModel.onPhotoSelected(uri.toString()) }
 
-    // Dummy collaborator colors for UI skeleton
-    val collaboratorColors = listOf(Sage, Beige, Brown)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor   = Sage,
+        unfocusedBorderColor = Beige
+    )
 
     Scaffold(
         containerColor = Cream,
         topBar = {
-            com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar(
-                title    = "New Scrapbook",
+            MemoryCircleTopBar(
+                title    = if (isJoinMode) "Add Your Photo" else "New Memory",
                 showBack = true,
                 onBack   = onBack
             )
@@ -73,86 +89,70 @@ fun ScrapbookScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
 
-            // --- Select Group ---
-            // Single-select: only one existing group can be the scrapbook source.
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text  = "SELECT GROUP",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkSecondary
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    viewModel.availableGroups.forEach { group ->
-                        GroupSelectChip(
-                            label      = group.name,
-                            isSelected = selectedGroupId == group.id,
-                            onClick    = { viewModel.onSelectGroup(group.id) }
-                        )
-                    }
+            // --- Date (new entries are dated today; join inherits the existing day) ---
+            if (!isJoinMode) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SectionLabel("DATE")
+                    Text(
+                        text  = today,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Brown
+                    )
                 }
             }
 
-            // --- Collaborate With ---
+            // --- Title (editable when creating, read-only when joining) ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text  = "COLLABORATE WITH",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkSecondary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Dummy collaborator avatars
-                    collaboratorColors.forEach { color ->
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                        )
-                    }
-                    // Add collaborator button
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .border(1.5.dp, Beige, CircleShape)
-                            .clickable { }
-                    ) {
-                        Text("+", color = Brown, style = MaterialTheme.typography.titleLarge)
-                    }
+                SectionLabel("TITLE")
+                if (isJoinMode) {
+                    Text(
+                        text  = title.ifBlank { "Untitled" },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Ink
+                    )
+                } else {
+                    OutlinedTextField(
+                        value         = title,
+                        onValueChange = viewModel::onTitleChange,
+                        modifier      = Modifier.fillMaxWidth(),
+                        singleLine    = true,
+                        shape         = RoundedCornerShape(12.dp),
+                        placeholder   = { Text("Name this moment", style = MaterialTheme.typography.bodyMedium) },
+                        colors        = fieldColors
+                    )
                 }
             }
 
             // --- Tags ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text  = "TAGS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkSecondary
-                )
-                // Existing tags wrap onto multiple lines as needed
+                SectionLabel("TAGS")
                 FlowRow(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement   = Arrangement.spacedBy(8.dp)
                 ) {
-                    tags.forEach { tag ->
-                        TagChip(
-                            label     = tag,
-                            onRemove  = { viewModel.onRemoveTag(tag) }
-                        )
-                    }
-                    if (!showAddTag) {
-                        AddTagChip(onClick = { showAddTag = true })
+                    if (isJoinMode) {
+                        // Inherited tags, read-only
+                        if (tags.isEmpty()) {
+                            Text(
+                                text  = "No tags",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = InkTertiary
+                            )
+                        } else {
+                            tags.forEach { ReadOnlyTagChip(it) }
+                        }
+                    } else {
+                        tags.forEach { tag ->
+                            TagChip(label = tag, onRemove = { viewModel.onRemoveTag(tag) })
+                        }
+                        if (!showAddTag) {
+                            AddTagChip(onClick = { showAddTag = true })
+                        }
                     }
                 }
 
-                // Tag input gets its own full-width row so the typed text is
-                // never clipped (no forced height/width on the text field).
-                if (showAddTag) {
+                if (!isJoinMode && showAddTag) {
                     Row(
                         modifier              = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -165,10 +165,7 @@ fun ScrapbookScreen(
                             shape         = RoundedCornerShape(20.dp),
                             singleLine    = true,
                             placeholder   = { Text("Enter a tag", style = MaterialTheme.typography.bodyMedium) },
-                            colors        = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor   = Sage,
-                                unfocusedBorderColor = Beige
-                            )
+                            colors        = fieldColors
                         )
                         TextButton(onClick = {
                             viewModel.onAddTag(newTagInput)
@@ -181,48 +178,64 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Group Size (number of members) ---
-            // A scrapbook shows one photo per member at every date, so this count
-            // decides the generated layout. Replaces the old template picker.
+            // --- Photo from album (one per person) ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text  = "GROUP SIZE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkSecondary
-                )
-                Text(
-                    text  = "How many members? Each member's photo appears at every date.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = InkTertiary
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    viewModel.availableMemberCounts.forEach { count ->
-                        MemberCountChip(
-                            count      = count,
-                            isSelected = selectedMemberCount == count,
-                            onClick    = { viewModel.onMemberCountSelected(count) }
+                SectionLabel("YOUR PHOTO")
+                val currentPhoto = photoUri
+                if (currentPhoto == null) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.5.dp, Beige, RoundedCornerShape(16.dp))
+                            .clickable {
+                                pickPhoto.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                    ) {
+                        Text("📷  Choose from album", color = Brown, style = MaterialTheme.typography.bodyLarge)
+                    }
+                } else {
+                    AsyncImage(
+                        model              = currentPhoto,
+                        contentDescription = "Selected photo",
+                        contentScale       = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                pickPhoto.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                    )
+                    TextButton(onClick = {
+                        pickPhoto.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )
+                    }) {
+                        Text("Change photo", color = AccentGreen)
                     }
                 }
             }
 
-            // --- Journal Entry ---
+            // --- Your description ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text  = "JOURNAL ENTRY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = InkSecondary
-                )
+                SectionLabel("YOUR DESCRIPTION")
                 OutlinedTextField(
-                    value         = journalEntry,
-                    onValueChange = viewModel::onJournalChange,
+                    value         = description,
+                    onValueChange = viewModel::onDescriptionChange,
                     modifier      = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
                     shape         = RoundedCornerShape(16.dp),
                     placeholder   = {
                         Text(
-                            "These moments feel like summer light through leaves...",
+                            "Say something about your photo...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Brown.copy(alpha = 0.5f)
                         )
@@ -238,9 +251,13 @@ fun ScrapbookScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Generate Button ---
+            // --- Save Button ---
             Button(
-                onClick  = { onGenerate(selectedMemberCount) },
+                onClick  = {
+                    viewModel.save(groupId, today)
+                    onSaved()
+                },
+                enabled  = viewModel.canSave,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -250,7 +267,10 @@ fun ScrapbookScreen(
                     contentColor   = Cream
                 )
             ) {
-                Text("✦  Generate Scrapbook", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text  = if (isJoinMode) "✦  Add to Timeline" else "✦  Create Memory",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -259,41 +279,18 @@ fun ScrapbookScreen(
 }
 
 /**
- * What: Displays a single selectable group chip. Highlights when selected.
- *       Used for single-select group choice (like a radio button styled as a chip).
- * Who: Called by ScrapbookScreen for each available group.
- * When: Rendered in the "Select group" section.
+ * What: A small uppercase section header used throughout the creation form.
+ * Who: Called by ScrapbookScreen for each section.
  */
 @Composable
-fun GroupSelectChip(
-    label:      String,
-    isSelected: Boolean,
-    onClick:    () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (isSelected) Sage.copy(alpha = 0.2f) else Color.Transparent)
-            .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
-                color = if (isSelected) Sage else Beige,
-                shape = RoundedCornerShape(20.dp)
-            )
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text  = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isSelected) AccentGreen else Brown
-        )
-    }
+private fun SectionLabel(text: String) {
+    Text(text = text, style = MaterialTheme.typography.labelSmall, color = InkSecondary)
 }
 
 /**
  * What: Displays a single tag as a removable chip.
- * Who: Called by ScrapbookScreen for each tag in the tags list.
- * When: Rendered for every tag the user has added.
+ * Who: Called by ScrapbookScreen for each editable tag.
+ * When: Rendered for every tag in new-entry mode.
  */
 @Composable
 fun TagChip(label: String, onRemove: () -> Unit) {
@@ -309,9 +306,25 @@ fun TagChip(label: String, onRemove: () -> Unit) {
 }
 
 /**
+ * What: Displays an inherited tag as a non-removable chip (join mode).
+ * Who: Called by ScrapbookScreen when showing a creator's tags read-only.
+ */
+@Composable
+fun ReadOnlyTagChip(label: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .border(1.dp, Beige, RoundedCornerShape(20.dp))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Brown)
+    }
+}
+
+/**
  * What: Displays a dashed "+ Add tag" chip button.
  * Who: Called by ScrapbookScreen to let users add new tags.
- * When: Rendered after the existing tag chips.
+ * When: Rendered after the existing tag chips in new-entry mode.
  */
 @Composable
 fun AddTagChip(onClick: () -> Unit) {
@@ -323,38 +336,6 @@ fun AddTagChip(onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Text("+ Add tag", style = MaterialTheme.typography.bodyMedium, color = Brown)
-    }
-}
-
-/**
- * What: A circular selectable chip showing a group-size number. Highlights when selected.
- * Who: Called by ScrapbookScreen for each available member count.
- * When: Rendered in the "Group size" section.
- */
-@Composable
-fun MemberCountChip(
-    count:      Int,
-    isSelected: Boolean,
-    onClick:    () -> Unit
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(if (isSelected) Sage.copy(alpha = 0.2f) else Color.Transparent)
-            .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
-                color = if (isSelected) Sage else Beige,
-                shape = CircleShape
-            )
-            .clickable { onClick() }
-    ) {
-        Text(
-            text  = count.toString(),
-            style = MaterialTheme.typography.titleLarge,
-            color = if (isSelected) AccentGreen else Brown
-        )
     }
 }
 
