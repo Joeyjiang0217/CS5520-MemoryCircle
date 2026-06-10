@@ -31,16 +31,18 @@ import com.cs5520group15.memorycircle.ui.theme.*
  */
 @Composable
 fun ScrapbookViewerScreen(
-    groupId: String,
-    onBack:  () -> Unit
+    groupId:     String,
+    memberCount: Int,
+    onBack:      () -> Unit
 ) {
     // In debug builds, load mock data instead of Firestore.
-    val entries = remember(groupId) {
+    // memberCount controls how many member photos appear at each date.
+    val entries = remember(groupId, memberCount) {
         if (BuildConfig.DEBUG) {
-            ScrapbookMockData.getMockEntries(groupId)
+            ScrapbookMockData.getMockEntries(groupId, memberCount)
         } else {
             // TODO: load this month's entries from Firestore
-            ScrapbookMockData.getMockEntries(groupId)
+            ScrapbookMockData.getMockEntries(groupId, memberCount)
         }
     }
 
@@ -131,15 +133,22 @@ private fun TimelineEntry(entry: ScrapbookEntry) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors    = CardDefaults.cardColors(containerColor = Cream)
             ) {
-                AsyncImage(
-                    model              = entry.imageUrl,
-                    contentDescription = entry.title,
-                    contentScale       = ContentScale.Crop,
-                    modifier           = Modifier
+                // One photo per member — laid out as a grid so every member's
+                // photo stays clearly visible regardless of group size.
+                MemberPhotoGrid(
+                    photos   = entry.memberPhotos,
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .padding(8.dp)
                 )
-                Column(modifier = Modifier.padding(12.dp)) {
+                Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+                    // Member count makes the "group memory" explicit
+                    Text(
+                        text  = "👥 ${entry.memberPhotos.size} members",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Brown
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text  = entry.title,
                         style = MaterialTheme.typography.titleLarge,
@@ -173,10 +182,60 @@ private fun TimelineEntry(entry: ScrapbookEntry) {
     }
 }
 
+/**
+ * What: Lays out one photo per group member in a grid sized to the count, so
+ *       every member's photo stays large enough to see. Cells have a fixed
+ *       height (keeps the timeline's continuous line measurable) and crop to fill.
+ * Who: Called by TimelineEntry for each entry's member photos.
+ * When: Rendered inside every memory card.
+ */
+@Composable
+private fun MemberPhotoGrid(
+    photos:   List<String>,
+    modifier: Modifier = Modifier
+) {
+    if (photos.isEmpty()) return
+
+    // Fewer columns for small groups keeps photos big; cap at 3 for larger ones.
+    val columns = when (photos.size) {
+        1    -> 1
+        2, 4 -> 2
+        else -> 3   // 3, 5, 6
+    }
+
+    Column(
+        modifier            = modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        photos.chunked(columns).forEach { rowPhotos ->
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                rowPhotos.forEach { url ->
+                    AsyncImage(
+                        model              = url,
+                        contentDescription = "Member photo",
+                        contentScale       = ContentScale.Crop,
+                        modifier           = Modifier
+                            .weight(1f)
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+                // Keep cell widths aligned when the last row isn't full
+                repeat(columns - rowPhotos.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun ScrapbookViewerScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookViewerScreen(groupId = "test", onBack = {})
+        ScrapbookViewerScreen(groupId = "test", memberCount = 4, onBack = {})
     }
 }

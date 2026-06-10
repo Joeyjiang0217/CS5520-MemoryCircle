@@ -109,25 +109,25 @@ fun MemoryCircleNavigation() {
         }
 
         // Scrapbook creation screen
-        // onGenerate → navigate to ScrapbookViewer with the same groupId
+        // onGenerate → navigate to the timeline viewer with the chosen group size
         composable<ScrapbookDetail> { entry ->
             val detail = entry.toRoute<ScrapbookDetail>()
             ScrapbookScreen(
                 groupId    = detail.groupId,
                 onBack     = { navController.popBackStack() },
-                onGenerate = {
-                    navController.navigate(ScrapbookViewer(detail.groupId))
+                onGenerate = { memberCount ->
+                    navController.navigate(ScrapbookViewer(detail.groupId, memberCount))
                 }
             )
         }
 
-        // Scrapbook viewer screen
-        // Displays generated pages (HorizontalPager) + timeline
+        // Scrapbook viewer screen — monthly timeline with one photo per member
         composable<ScrapbookViewer> { entry ->
             val detail = entry.toRoute<ScrapbookViewer>()
             ScrapbookViewerScreen(
-                groupId = detail.groupId,
-                onBack  = { navController.popBackStack() }
+                groupId     = detail.groupId,
+                memberCount = detail.memberCount,
+                onBack      = { navController.popBackStack() }
             )
         }
 
@@ -136,8 +136,8 @@ fun MemoryCircleNavigation() {
                 currentRoute    = currentRoute,
                 onNavigate      = onTabSelected,
                 onOpenScrapbook = { groupId ->
-                    // Tap an existing scrapbook → view its generated pages
-                    navController.navigate(ScrapbookViewer(groupId))
+                    // Tap an existing scrapbook → view its timeline (default group size)
+                    navController.navigate(ScrapbookViewer(groupId, 4))
                 },
                 onCreateNew     = {
                     // The "+" FAB starts a brand-new scrapbook for a new month

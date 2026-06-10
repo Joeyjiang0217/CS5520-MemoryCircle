@@ -32,13 +32,13 @@ import com.cs5520group15.memorycircle.ui.theme.*
 fun ScrapbookScreen(
     groupId:  String,
     onBack:   () -> Unit,
-    onGenerate: () -> Unit = {},
+    onGenerate: (Int) -> Unit = {},
     viewModel: ScrapbookViewModel = viewModel()
 ) {
-    val selectedTemplate by viewModel.selectedTemplate.collectAsStateWithLifecycle()
-    val selectedGroupId  by viewModel.selectedGroupId.collectAsStateWithLifecycle()
-    val journalEntry     by viewModel.journalEntry.collectAsStateWithLifecycle()
-    val tags             by viewModel.tags.collectAsStateWithLifecycle()
+    val selectedGroupId     by viewModel.selectedGroupId.collectAsStateWithLifecycle()
+    val selectedMemberCount by viewModel.selectedMemberCount.collectAsStateWithLifecycle()
+    val journalEntry        by viewModel.journalEntry.collectAsStateWithLifecycle()
+    val tags                by viewModel.tags.collectAsStateWithLifecycle()
 
     var newTagInput by remember { mutableStateOf("") }
     var showAddTag  by remember { mutableStateOf(false) }
@@ -181,23 +181,26 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Preview Pages (Template Selection) ---
+            // --- Group Size (number of members) ---
+            // A scrapbook shows one photo per member at every date, so this count
+            // decides the generated layout. Replaces the old template picker.
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text  = "PREVIEW PAGES",
+                    text  = "GROUP SIZE",
                     style = MaterialTheme.typography.labelSmall,
                     color = InkSecondary
                 )
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    listOf("grid2", "grid4", "grid6").forEach { template ->
-                        TemplatePreview(
-                            template   = template,
-                            isSelected = selectedTemplate == template,
-                            onClick    = { viewModel.onTemplateSelected(template) },
-                            modifier   = Modifier.weight(1f)
+                Text(
+                    text  = "How many members? Each member's photo appears at every date.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = InkTertiary
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    viewModel.availableMemberCounts.forEach { count ->
+                        MemberCountChip(
+                            count      = count,
+                            isSelected = selectedMemberCount == count,
+                            onClick    = { viewModel.onMemberCountSelected(count) }
                         )
                     }
                 }
@@ -237,10 +240,7 @@ fun ScrapbookScreen(
 
             // --- Generate Button ---
             Button(
-                onClick  = {
-                    viewModel.onGenerate()
-                    onGenerate()
-                },
+                onClick  = { onGenerate(selectedMemberCount) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -327,61 +327,34 @@ fun AddTagChip(onClick: () -> Unit) {
 }
 
 /**
- * What: Displays a visual preview of a scrapbook layout template.
- *       Highlights when selected.
- * Who: Called by ScrapbookScreen for each available template option.
- * When: Rendered in the template selection row.
+ * What: A circular selectable chip showing a group-size number. Highlights when selected.
+ * Who: Called by ScrapbookScreen for each available member count.
+ * When: Rendered in the "Group size" section.
  */
 @Composable
-fun TemplatePreview(
-    template:   String,
+fun MemberCountChip(
+    count:      Int,
     isSelected: Boolean,
-    onClick:    () -> Unit,
-    modifier:   Modifier = Modifier
+    onClick:    () -> Unit
 ) {
-    val gridCount = when (template) {
-        "grid2" -> 2
-        "grid6" -> 6
-        else    -> 4
-    }
-
     Box(
-        modifier = modifier
-            .aspectRatio(0.75f)
-            .clip(RoundedCornerShape(12.dp))
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (isSelected) Sage.copy(alpha = 0.2f) else Color.Transparent)
             .border(
-                width = if (isSelected) 2.dp else 1.dp,
+                width = if (isSelected) 1.5.dp else 1.dp,
                 color = if (isSelected) Sage else Beige,
-                shape = RoundedCornerShape(12.dp)
+                shape = CircleShape
             )
-            .background(if (isSelected) Sage.copy(alpha = 0.1f) else GraySoft)
             .clickable { onClick() }
-            .padding(6.dp)
     ) {
-        // Mini grid preview
-        val rows = if (gridCount == 2) 1 else 2
-        val cols = if (gridCount == 6) 3 else 2
-        Column(
-            modifier            = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            repeat(rows) {
-                Row(
-                    modifier              = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    repeat(cols) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (isSelected) Sage.copy(alpha = 0.4f) else Beige)
-                        )
-                    }
-                }
-            }
-        }
+        Text(
+            text  = count.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            color = if (isSelected) AccentGreen else Brown
+        )
     }
 }
 

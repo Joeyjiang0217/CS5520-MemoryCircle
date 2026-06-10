@@ -16,7 +16,8 @@ import kotlinx.serialization.Serializable
 @Serializable object Friends
 @Serializable object Profile
 
-@Serializable data class ScrapbookViewer(val groupId: String)
+// memberCount drives how many member photos appear at each timeline date
+@Serializable data class ScrapbookViewer(val groupId: String, val memberCount: Int)
 
 // data class = a route that carries arguments
 // Used for screens that need data to know what to display
