@@ -16,6 +16,8 @@ import kotlinx.serialization.Serializable
 @Serializable object Friends
 @Serializable object Profile
 
+@Serializable data class ScrapbookViewer(val groupId: String)
+
 // data class = a route that carries arguments
 // Used for screens that need data to know what to display
 @Serializable data class ScrapbookDetail(val groupId: String)

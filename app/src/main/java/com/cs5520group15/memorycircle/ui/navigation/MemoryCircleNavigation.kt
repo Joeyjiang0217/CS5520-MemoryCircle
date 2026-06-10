@@ -12,6 +12,7 @@ import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
+import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
 
 /**
  * What: Sets up the entire navigation graph for the app.
@@ -32,8 +33,8 @@ fun MemoryCircleNavigation() {
     val currentRoute = navBackStackEntry?.destination?.route ?: ""
 
     NavHost(
-        navController  = navController,
-        startDestination = Login  // First screen the user sees
+        navController    = navController,
+        startDestination = Login
     ) {
 
         // Login screen
@@ -71,8 +72,8 @@ fun MemoryCircleNavigation() {
         // Passes currentRoute so BottomNav knows which tab to highlight
         composable<Home> {
             HomeScreen(
-                currentRoute  = currentRoute,
-                onNavigate    = { route ->
+                currentRoute = currentRoute,
+                onNavigate   = { route ->
                     navController.navigate(route) {
                         // Keeps the back stack clean when switching tabs
                         popUpTo(navController.graph.findStartDestination().id) {
@@ -88,11 +89,24 @@ fun MemoryCircleNavigation() {
             )
         }
 
-        // Scrapbook detail screen
-        // Receives groupId from the route
+        // Scrapbook creation screen
+        // onGenerate → navigate to ScrapbookViewer with the same groupId
         composable<ScrapbookDetail> { entry ->
             val detail = entry.toRoute<ScrapbookDetail>()
             ScrapbookScreen(
+                groupId    = detail.groupId,
+                onBack     = { navController.popBackStack() },
+                onGenerate = {
+                    navController.navigate(ScrapbookViewer(detail.groupId))
+                }
+            )
+        }
+
+        // Scrapbook viewer screen
+        // Displays generated pages (HorizontalPager) + timeline
+        composable<ScrapbookViewer> { entry ->
+            val detail = entry.toRoute<ScrapbookViewer>()
+            ScrapbookViewerScreen(
                 groupId = detail.groupId,
                 onBack  = { navController.popBackStack() }
             )

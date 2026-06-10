@@ -58,4 +58,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // Image loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+// Pager (HorizontalPager)
+    implementation("androidx.compose.foundation:foundation:1.7.0")
 }
