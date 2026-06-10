@@ -4,8 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,260 +13,161 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.cs5520group15.memorycircle.BuildConfig
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 
 /**
- * What: Displays the generated scrapbook with two views:
- *       1. HorizontalPager for template-based photo pages (swipe left/right)
- *       2. Timeline LazyColumn for scrolling through photos with captions
- * Who: Called by MemoryCircleNavigation after the user generates a scrapbook.
- * When: Navigated to when ScrapbookScreen's Generate button is tapped.
+ * What: Displays one month's scrapbook as a vertical timeline. Each entry sits
+ *       on a continuous left-hand line marked by a Brown dot and its date, with
+ *       a card on the right showing the photo, title, description, and mood.
+ * Who: Called by MemoryCircleNavigation when viewing a scrapbook (ScrapbookViewer route).
+ * When: Navigated to from the Memories tab or after generating a scrapbook.
  */
 @Composable
 fun ScrapbookViewerScreen(
-    groupId:   String,
-    onBack:    () -> Unit,
-    viewModel: ScrapbookViewModel = viewModel()
+    groupId: String,
+    onBack:  () -> Unit
 ) {
-    val pages by viewModel.pages.collectAsStateWithLifecycle()
+    // In debug builds, load mock data instead of Firestore.
+    val entries = remember(groupId) {
+        if (BuildConfig.DEBUG) {
+            ScrapbookMockData.getMockEntries(groupId)
+        } else {
+            // TODO: load this month's entries from Firestore
+            ScrapbookMockData.getMockEntries(groupId)
+        }
+    }
 
     Scaffold(
         containerColor = Cream,
         topBar = {
             MemoryCircleTopBar(
-                title    = "Memory Scrapbook",
+                title    = "June 2025",
                 showBack = true,
                 onBack   = onBack
             )
         }
     ) { padding ->
         LazyColumn(
-            modifier            = Modifier
+            modifier       = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            // --- Section 1: HorizontalPager (template pages) ---
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                ) {
-                    Text(
-                        text     = "SCRAPBOOK PAGES",
-                        style    = MaterialTheme.typography.labelSmall,
-                        color    = InkSecondary,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-
-                    if (pages.isEmpty()) {
-                        // Empty state
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(240.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(GraySoft)
-                        ) {
-                            Text(
-                                "No pages generated yet",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = InkTertiary
-                            )
-                        }
-                    } else {
-                        val pagerState = rememberPagerState(pageCount = { pages.size })
-
-                        HorizontalPager(
-                            state    = pagerState,
-                            modifier = Modifier.fillMaxWidth()
-                        ) { pageIndex ->
-                            ScrapbookPageView(page = pages[pageIndex])
-                        }
-
-                        // Page indicator dots
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier              = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            repeat(pages.size) { index ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
-                                        .clip(RoundedCornerShape(50))
-                                        .background(
-                                            if (pagerState.currentPage == index) Brown
-                                            else Beige
-                                        )
-                                )
-                                if (index < pages.size - 1) Spacer(modifier = Modifier.width(6.dp))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Section 2: Timeline ---
-            item {
-                Text(
-                    text     = "TIMELINE",
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = InkSecondary,
-                    modifier = Modifier.padding(horizontal = 24.dp)
-                )
-            }
-
-            // Flatten all photos from all pages into a timeline
-            val allPhotos = pages.flatMap { it.photos }
-            itemsIndexed(allPhotos, key = { _, photo -> photo.id }) { index, photo ->
-                TimelinePhotoItem(
-                    photo  = photo,
-                    isLast = index == allPhotos.lastIndex
-                )
-            }
-
-            item { Spacer(modifier = Modifier.height(24.dp)) }
-        }
-    }
-}
-
-/**
- * What: Renders a single scrapbook page as a photo grid based on the template type.
- * Who: Called by ScrapbookViewerScreen inside the HorizontalPager.
- * When: Rendered for each page in the pages list.
- */
-@Composable
-fun ScrapbookPageView(page: ScrapbookViewModel.ScrapbookPage) {
-    val cols = when (page.template) {
-        "grid6" -> 3
-        else    -> 2
-    }
-
-    Column(
-        modifier            = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(GraySoft)
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        // Date label
-        Text(
-            text     = page.date,
-            style    = MaterialTheme.typography.bodyMedium,
-            color    = InkSecondary,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        // Photo grid
-        page.photos.chunked(cols).forEach { rowPhotos ->
-            Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                rowPhotos.forEach { photo ->
-                    AsyncImage(
-                        model               = photo.url,
-                        contentDescription  = photo.caption,
-                        contentScale        = ContentScale.Crop,
-                        modifier            = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-                }
-                // Fill empty slots if last row is incomplete
-                repeat(cols - rowPhotos.size) {
-                    Box(modifier = Modifier.weight(1f))
-                }
+            // No verticalArrangement spacing here — each row carries its own
+            // bottom padding so the timeline line stays continuous between entries.
+            items(entries, key = { it.id }) { entry ->
+                TimelineEntry(entry = entry)
             }
         }
     }
 }
 
 /**
- * What: Renders a single photo in a vertical timeline layout.
- *       Shows a vertical line on the left with a dot at each date,
- *       and the photo + caption on the right.
- * Who: Called by ScrapbookViewerScreen's LazyColumn for each photo.
- * When: Rendered for each photo across all scrapbook pages.
+ * What: One timeline row — a continuous vertical line + dot + date on the left,
+ *       and the memory card on the right.
+ * Who: Called by ScrapbookViewerScreen for each entry.
+ * When: Rendered for every entry in the month.
  */
 @Composable
-fun TimelinePhotoItem(
-    photo: ScrapbookViewModel.PhotoItem,
-    isLast: Boolean = false
-) {
+private fun TimelineEntry(entry: ScrapbookEntry) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
+            // IntrinsicSize.Min lets the left line fillMaxHeight to match the card,
+            // so the line spans the full row (card + bottom spacing) and connects
+            // continuously to the next entry.
+            .height(IntrinsicSize.Min)
     ) {
-        // --- Left side: vertical line + dot ---
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(32.dp)
+        // --- LEFT: continuous line, dot, date (fixed 72dp) ---
+        Box(
+            modifier = Modifier
+                .width(72.dp)
+                .fillMaxHeight()
         ) {
-            // Dot on the timeline
+            // Continuous vertical line, centered, spanning the full row height
             Box(
                 modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .align(Alignment.TopCenter)
                     .background(Brown)
             )
-            // Vertical line below the dot
-            // Hidden for the last item
-            if (!isLast) {
+            // Dot (centered with the card) + date directly below it
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier            = Modifier.align(Alignment.Center)
+            ) {
                 Box(
                     modifier = Modifier
-                        .width(2.dp)
-                        .height(220.dp)   // 200dp +
-                        .background(Beige)
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Brown)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text      = entry.date,
+                    style     = MaterialTheme.typography.labelSmall,
+                    color     = Brown,
+                    textAlign = TextAlign.Center
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(16.dp))
-
-        // --- Right side: date + photo + caption ---
+        // --- RIGHT: memory card (weight 1f). Bottom padding = spacing to next entry ---
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(start = 12.dp, bottom = 20.dp)
         ) {
-            // Date label
-            Text(
-                text = photo.date,
-                style = MaterialTheme.typography.labelSmall,
-                color = InkSecondary
-            )
-            // Photo
-            AsyncImage(
-                model = photo.url,
-                contentDescription = photo.caption,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(12.dp))
-            )
-            // Caption (only shown if not empty)
-            if (photo.caption.isNotBlank()) {
-                Text(
-                    text  = photo.caption,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = InkSecondary
+            Card(
+                shape     = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors    = CardDefaults.cardColors(containerColor = Cream)
+            ) {
+                AsyncImage(
+                    model              = entry.imageUrl,
+                    contentDescription = entry.title,
+                    contentScale       = ContentScale.Crop,
+                    modifier           = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
                 )
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text  = entry.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Ink
+                    )
+                    Text(
+                        text     = entry.description,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        color    = Ink,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Mood chip — SageGreen isn't a defined theme color, so this
+                    // uses AccentGreen (deeper green) for readable white text.
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(AccentGreen)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text  = entry.mood,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White
+                        )
+                    }
+                }
             }
         }
     }
@@ -277,6 +177,6 @@ fun TimelinePhotoItem(
 @Composable
 fun ScrapbookViewerScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookViewerScreen(groupId = "1", onBack = {})
+        ScrapbookViewerScreen(groupId = "test", onBack = {})
     }
 }
