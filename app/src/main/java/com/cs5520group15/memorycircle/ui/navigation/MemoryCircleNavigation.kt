@@ -11,6 +11,7 @@ import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
 import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
+import com.cs5520group15.memorycircle.ui.group.GroupMembersScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
@@ -127,6 +128,7 @@ fun MemoryCircleNavigation() {
             ScrapbookViewerScreen(
                 groupId        = detail.groupId,
                 onBack         = { navController.popBackStack() },
+                onOpenMembers  = { navController.navigate(GroupMembers(detail.groupId)) },
                 onAddTimePoint = { navController.navigate(ScrapbookDetail(detail.groupId)) },
                 onJoinEntry    = { entryId ->
                     navController.navigate(ScrapbookDetail(detail.groupId, entryId))
@@ -149,6 +151,15 @@ fun MemoryCircleNavigation() {
         composable<CreateGroup> {
             CreateGroupScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        // A group's members page — placeholder for now (owned by a teammate)
+        composable<GroupMembers> { entry ->
+            val detail = entry.toRoute<GroupMembers>()
+            GroupMembersScreen(
+                groupId = detail.groupId,
+                onBack  = { navController.popBackStack() }
             )
         }
     }

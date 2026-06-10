@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
@@ -36,6 +38,7 @@ import com.cs5520group15.memorycircle.ui.theme.*
 fun ScrapbookViewerScreen(
     groupId:        String,
     onBack:         () -> Unit,
+    onOpenMembers:  () -> Unit,
     onAddTimePoint: () -> Unit,
     onJoinEntry:    (String) -> Unit,
     viewModel:      ScrapbookViewerViewModel = viewModel()
@@ -53,7 +56,15 @@ fun ScrapbookViewerScreen(
             MemoryCircleTopBar(
                 title    = "June 2025",
                 showBack = true,
-                onBack   = onBack
+                onBack   = onBack,
+                actions  = {
+                    IconButton(onClick = onOpenMembers) {
+                        Icon(
+                            painter            = painterResource(R.drawable.ic_friends),
+                            contentDescription = "View group members"
+                        )
+                    }
+                }
             )
         },
         floatingActionButton = {
@@ -388,6 +399,7 @@ fun ScrapbookViewerScreenPreview() {
         ScrapbookViewerScreen(
             groupId        = "test",
             onBack         = {},
+            onOpenMembers  = {},
             onAddTimePoint = {},
             onJoinEntry    = {}
         )

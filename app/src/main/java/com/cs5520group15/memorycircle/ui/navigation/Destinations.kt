@@ -28,3 +28,6 @@ import kotlinx.serialization.Serializable
 
 // Create-a-new-group flow (pick contacts) — opened from the Home "+" FAB
 @Serializable object CreateGroup
+
+// A group's members page — opened from the contacts icon on the timeline top bar
+@Serializable data class GroupMembers(val groupId: String)
