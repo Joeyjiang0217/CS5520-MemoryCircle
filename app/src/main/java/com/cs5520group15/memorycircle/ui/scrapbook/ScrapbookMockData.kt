@@ -14,7 +14,20 @@ data class ScrapbookEntry(
     val title:        String,
     val description:  String,
     val memberPhotos: List<String>, // one photo per group member
-    val mood:         String         // e.g. "Happy", "Nostalgic", "Excited"
+    val mood:         String,        // e.g. "Happy", "Nostalgic", "Excited"
+    val comments:     List<Comment> = emptyList()
+)
+
+/**
+ * What: A short comment a group member leaves on a memory, expressing how they
+ *       felt about it (Xiaohongshu-style group comments).
+ * Who: Used by ScrapbookEntry, ScrapbookViewerViewModel, and ScrapbookViewerScreen.
+ * When: Created when a member posts a comment.
+ */
+data class Comment(
+    val id:     String,
+    val author: String,
+    val text:   String
 )
 
 /**
@@ -67,6 +80,17 @@ object ScrapbookMockData {
      * @param groupId woven into the seeds so different groups get different images
      * @param memberCount how many member photos each entry should contain (1..6)
      */
+    // Sample comments per entry id, so the comment feature is visible on load.
+    private val seedComments: Map<String, List<Comment>> = mapOf(
+        "1" to listOf(
+            Comment("1c1", "Mia",  "Best picnic ever 🧺"),
+            Comment("1c2", "Alex", "Already miss this day")
+        ),
+        "3" to listOf(
+            Comment("3c1", "Sam", "That playlist was unreal 🎶")
+        )
+    )
+
     fun getMockEntries(groupId: String, memberCount: Int): List<ScrapbookEntry> {
         val safeCount = memberCount.coerceIn(1, 6)
         return templates
@@ -79,7 +103,8 @@ object ScrapbookMockData {
                     mood         = t.mood,
                     memberPhotos = (1..safeCount).map { member ->
                         "https://picsum.photos/seed/${groupId}_${t.id}_m$member/400/300"
-                    }
+                    },
+                    comments     = seedComments[t.id] ?: emptyList()
                 )
             }
             .sortedBy { it.date.removePrefix("June ").trim().toIntOrNull() ?: 0 }

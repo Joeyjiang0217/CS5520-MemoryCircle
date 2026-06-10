@@ -13,19 +13,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.cs5520group15.memorycircle.BuildConfig
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
  * What: Displays one month's scrapbook as a vertical timeline. Each entry sits
  *       on a continuous left-hand line marked by a Brown dot and its date, with
- *       a card on the right showing the photo, title, description, and mood.
+ *       a card on the right showing the member photos, an editable title and
+ *       description, the mood, and group comments.
  * Who: Called by MemoryCircleNavigation when viewing a scrapbook (ScrapbookViewer route).
  * When: Navigated to from the Memories tab or after generating a scrapbook.
  */
@@ -33,18 +35,14 @@ import com.cs5520group15.memorycircle.ui.theme.*
 fun ScrapbookViewerScreen(
     groupId:     String,
     memberCount: Int,
-    onBack:      () -> Unit
+    onBack:      () -> Unit,
+    viewModel:   ScrapbookViewerViewModel = viewModel()
 ) {
-    // In debug builds, load mock data instead of Firestore.
-    // memberCount controls how many member photos appear at each date.
-    val entries = remember(groupId, memberCount) {
-        if (BuildConfig.DEBUG) {
-            ScrapbookMockData.getMockEntries(groupId, memberCount)
-        } else {
-            // TODO: load this month's entries from Firestore
-            ScrapbookMockData.getMockEntries(groupId, memberCount)
-        }
+    // Load once (mock data for now); in-memory edits/comments survive recompositions.
+    LaunchedEffect(groupId, memberCount) {
+        viewModel.loadIfNeeded(groupId, memberCount)
     }
+    val entries by viewModel.entries.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -65,7 +63,11 @@ fun ScrapbookViewerScreen(
             // No verticalArrangement spacing here — each row carries its own
             // bottom padding so the timeline line stays continuous between entries.
             items(entries, key = { it.id }) { entry ->
-                TimelineEntry(entry = entry)
+                TimelineEntry(
+                    entry        = entry,
+                    onSaveText   = { title, desc -> viewModel.updateEntryText(entry.id, title, desc) },
+                    onPostComment = { text -> viewModel.addComment(entry.id, author = "You", text = text) }
+                )
             }
         }
     }
@@ -78,33 +80,41 @@ fun ScrapbookViewerScreen(
  * When: Rendered for every entry in the month.
  */
 @Composable
-private fun TimelineEntry(entry: ScrapbookEntry) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // IntrinsicSize.Min lets the left line fillMaxHeight to match the card,
-            // so the line spans the full row (card + bottom spacing) and connects
-            // continuously to the next entry.
-            .height(IntrinsicSize.Min)
-    ) {
-        // --- LEFT: continuous line, dot, date (fixed 72dp) ---
-        Box(
-            modifier = Modifier
-                .width(72.dp)
-                .fillMaxHeight()
-        ) {
-            // Continuous vertical line, centered, spanning the full row height
+private fun TimelineEntry(
+    entry:         ScrapbookEntry,
+    onSaveText:    (String, String) -> Unit,
+    onPostComment: (String) -> Unit
+) {
+    // The continuous line is drawn in a background layer that matches the row's
+    // height via matchParentSize(). This avoids IntrinsicSize, which OutlinedTextField
+    // (used in edit mode) does not support.
+    Box(modifier = Modifier.fillMaxWidth()) {
+
+        // --- Background: continuous vertical line in the 72dp left gutter ---
+        Box(modifier = Modifier.matchParentSize()) {
             Box(
                 modifier = Modifier
-                    .width(2.dp)
-                    .fillMaxHeight()
-                    .align(Alignment.TopCenter)
-                    .background(Brown)
-            )
-            // Dot (centered with the card) + date directly below it
+                    .width(72.dp)
+                    .fillMaxHeight(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .fillMaxHeight()
+                        .background(Brown)
+                )
+            }
+        }
+
+        // --- Foreground: left gutter (dot + date) + memory card ---
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // Dot + date, vertically centered with the card
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier            = Modifier.align(Alignment.Center)
+                modifier            = Modifier
+                    .width(72.dp)
+                    .align(Alignment.CenterVertically)
             ) {
                 Box(
                     modifier = Modifier
@@ -120,62 +130,195 @@ private fun TimelineEntry(entry: ScrapbookEntry) {
                     textAlign = TextAlign.Center
                 )
             }
-        }
 
-        // --- RIGHT: memory card (weight 1f). Bottom padding = spacing to next entry ---
-        Column(
+            // Memory card. Bottom padding = spacing to next entry (line spans it too).
+            MemoryCard(
+                entry         = entry,
+                onSaveText    = onSaveText,
+                onPostComment = onPostComment,
+                modifier      = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp, bottom = 20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * What: The card for a single memory — member photos, an editable title and
+ *       description, the mood chip, and the group comment thread.
+ * Who: Called by TimelineEntry.
+ * When: Rendered for every entry.
+ */
+@Composable
+private fun MemoryCard(
+    entry:         ScrapbookEntry,
+    onSaveText:    (String, String) -> Unit,
+    onPostComment: (String) -> Unit,
+    modifier:      Modifier = Modifier
+) {
+    // Per-entry local UI state (keyed by id so it resets if the list changes)
+    var isEditing    by remember(entry.id) { mutableStateOf(false) }
+    var titleInput   by remember(entry.id) { mutableStateOf(entry.title) }
+    var descInput    by remember(entry.id) { mutableStateOf(entry.description) }
+    var commentInput by remember(entry.id) { mutableStateOf("") }
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor   = Sage,
+        unfocusedBorderColor = Beige
+    )
+
+    Card(
+        modifier  = modifier,
+        shape     = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors    = CardDefaults.cardColors(containerColor = Cream)
+    ) {
+        // One photo per member — laid out as a grid so every member's photo
+        // stays clearly visible regardless of group size.
+        MemberPhotoGrid(
+            photos   = entry.memberPhotos,
             modifier = Modifier
-                .weight(1f)
-                .padding(start = 12.dp, bottom = 20.dp)
-        ) {
-            Card(
-                shape     = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                colors    = CardDefaults.cardColors(containerColor = Cream)
+                .fillMaxWidth()
+                .padding(8.dp)
+        )
+
+        Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+
+            // Header: member count + Edit/Done toggle (pen icon as ✏️)
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
             ) {
-                // One photo per member — laid out as a grid so every member's
-                // photo stays clearly visible regardless of group size.
-                MemberPhotoGrid(
-                    photos   = entry.memberPhotos,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
+                Text(
+                    text  = "👥 ${entry.memberPhotos.size} members",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Brown
                 )
-                Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-                    // Member count makes the "group memory" explicit
+                TextButton(
+                    onClick = {
+                        if (isEditing) {
+                            onSaveText(titleInput, descInput)
+                            isEditing = false
+                        } else {
+                            titleInput = entry.title
+                            descInput  = entry.description
+                            isEditing  = true
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
                     Text(
-                        text  = "👥 ${entry.memberPhotos.size} members",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Brown
+                        text  = if (isEditing) "✓ Done" else "✏️ Edit",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = AccentGreen
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Title + description: read-only text, or editable fields in edit mode
+            if (isEditing) {
+                OutlinedTextField(
+                    value         = titleInput,
+                    onValueChange = { titleInput = it },
+                    modifier      = Modifier.fillMaxWidth(),
+                    label         = { Text("Title") },
+                    singleLine    = true,
+                    shape         = RoundedCornerShape(12.dp),
+                    colors        = fieldColors
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value         = descInput,
+                    onValueChange = { descInput = it },
+                    modifier      = Modifier.fillMaxWidth(),
+                    label         = { Text("Content") },
+                    shape         = RoundedCornerShape(12.dp),
+                    colors        = fieldColors
+                )
+            } else {
+                Text(
+                    text  = entry.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Ink
+                )
+                if (entry.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text  = entry.title,
-                        style = MaterialTheme.typography.titleLarge,
+                        text  = entry.description,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = Ink
                     )
-                    Text(
-                        text     = entry.description,
-                        style    = MaterialTheme.typography.bodyMedium,
-                        color    = Ink,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // Mood chip — SageGreen isn't a defined theme color, so this
-                    // uses AccentGreen (deeper green) for readable white text.
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(AccentGreen)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text  = entry.mood,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White
-                        )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mood chip
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(AccentGreen)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text  = entry.mood,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = Beige.copy(alpha = 0.6f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // --- Comments (any group member can share their mood) ---
+            Text(
+                text  = "COMMENTS",
+                style = MaterialTheme.typography.labelSmall,
+                color = InkSecondary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (entry.comments.isEmpty()) {
+                Text(
+                    text  = "No comments yet — be the first to share how you felt.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = InkTertiary
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    entry.comments.forEach { comment ->
+                        CommentRow(comment)
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Comment input
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value         = commentInput,
+                    onValueChange = { commentInput = it },
+                    modifier      = Modifier.weight(1f),
+                    placeholder   = { Text("Share your mood…", style = MaterialTheme.typography.bodyMedium) },
+                    singleLine    = true,
+                    shape         = RoundedCornerShape(20.dp),
+                    colors        = fieldColors
+                )
+                TextButton(onClick = {
+                    onPostComment(commentInput)
+                    commentInput = ""
+                }) {
+                    Text("Post", color = AccentGreen)
                 }
             }
         }
@@ -183,10 +326,32 @@ private fun TimelineEntry(entry: ScrapbookEntry) {
 }
 
 /**
+ * What: A single comment line — author in bold followed by their text.
+ * Who: Called by MemoryCard for each comment.
+ * When: Rendered for every comment on an entry.
+ */
+@Composable
+private fun CommentRow(comment: Comment) {
+    Row {
+        Text(
+            text  = comment.author,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            color = Brown
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text  = comment.text,
+            style = MaterialTheme.typography.bodySmall,
+            color = Ink
+        )
+    }
+}
+
+/**
  * What: Lays out one photo per group member in a grid sized to the count, so
  *       every member's photo stays large enough to see. Cells have a fixed
- *       height (keeps the timeline's continuous line measurable) and crop to fill.
- * Who: Called by TimelineEntry for each entry's member photos.
+ *       height and crop to fill.
+ * Who: Called by MemoryCard for each entry's member photos.
  * When: Rendered inside every memory card.
  */
 @Composable
