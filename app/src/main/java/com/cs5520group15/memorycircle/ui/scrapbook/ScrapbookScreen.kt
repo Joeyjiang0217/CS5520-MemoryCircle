@@ -36,11 +36,20 @@ fun ScrapbookScreen(
     viewModel: ScrapbookViewModel = viewModel()
 ) {
     val selectedTemplate by viewModel.selectedTemplate.collectAsStateWithLifecycle()
+    val selectedGroupId  by viewModel.selectedGroupId.collectAsStateWithLifecycle()
     val journalEntry     by viewModel.journalEntry.collectAsStateWithLifecycle()
     val tags             by viewModel.tags.collectAsStateWithLifecycle()
 
     var newTagInput by remember { mutableStateOf("") }
     var showAddTag  by remember { mutableStateOf(false) }
+
+    // If we arrived from a specific group card, pre-select that group.
+    // The Memories "+" flow passes "new", which matches nothing, so nothing is preselected.
+    LaunchedEffect(groupId) {
+        if (viewModel.availableGroups.any { it.id == groupId }) {
+            viewModel.onSelectGroup(groupId)
+        }
+    }
 
     // Dummy collaborator colors for UI skeleton
     val collaboratorColors = listOf(Sage, Beige, Brown)
@@ -63,6 +72,28 @@ fun ScrapbookScreen(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+
+            // --- Select Group ---
+            // Single-select: only one existing group can be the scrapbook source.
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text  = "SELECT GROUP",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = InkSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    viewModel.availableGroups.forEach { group ->
+                        GroupSelectChip(
+                            label      = group.name,
+                            isSelected = selectedGroupId == group.id,
+                            onClick    = { viewModel.onSelectGroup(group.id) }
+                        )
+                    }
+                }
+            }
 
             // --- Collaborate With ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -214,6 +245,38 @@ fun ScrapbookScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+}
+
+/**
+ * What: Displays a single selectable group chip. Highlights when selected.
+ *       Used for single-select group choice (like a radio button styled as a chip).
+ * Who: Called by ScrapbookScreen for each available group.
+ * When: Rendered in the "Select group" section.
+ */
+@Composable
+fun GroupSelectChip(
+    label:      String,
+    isSelected: Boolean,
+    onClick:    () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (isSelected) Sage.copy(alpha = 0.2f) else Color.Transparent)
+            .border(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) Sage else Beige,
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isSelected) AccentGreen else Brown
+        )
     }
 }
 

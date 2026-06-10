@@ -38,14 +38,34 @@ class ScrapbookViewModel : ViewModel() {
         val date:     String
     )
 
+    /**
+     * What: A group the user can pick as the source for a new scrapbook.
+     * Who: Used by ScrapbookViewModel and ScrapbookScreen.
+     * When: Listed in the "Select group" section of the creation screen.
+     */
+    data class GroupOption(
+        val id:   String,
+        val name: String
+    )
+
+    // Existing groups the user can choose from — Firebase will replace this later.
+    // Mirrors the dummy groups shown on the Home screen.
+    val availableGroups = listOf(
+        GroupOption("1", "Group 1"),
+        GroupOption("2", "Group 2"),
+        GroupOption("3", "Group 3")
+    )
+
     // --- State ---
     private val _selectedTemplate = MutableStateFlow("grid4")
+    private val _selectedGroupId  = MutableStateFlow<String?>(null)
     private val _journalEntry     = MutableStateFlow("")
     private val _tags             = MutableStateFlow(listOf("#2026", "#friends"))
     private val _pages            = MutableStateFlow<List<ScrapbookPage>>(emptyList())
     private val _isGenerated      = MutableStateFlow(false)
 
     val selectedTemplate: StateFlow<String>           = _selectedTemplate.asStateFlow()
+    val selectedGroupId:  StateFlow<String?>          = _selectedGroupId.asStateFlow()
     val journalEntry:     StateFlow<String>           = _journalEntry.asStateFlow()
     val tags:             StateFlow<List<String>>     = _tags.asStateFlow()
     val pages:            StateFlow<List<ScrapbookPage>> = _pages.asStateFlow()
@@ -70,6 +90,16 @@ class ScrapbookViewModel : ViewModel() {
      */
     fun onTemplateSelected(template: String) {
         _selectedTemplate.value = template
+    }
+
+    /**
+     * What: Selects a single group as the source for the scrapbook.
+     *       Tapping the already-selected group clears the selection.
+     * Who: Called by ScrapbookScreen when user taps a group chip.
+     * When: On group selection.
+     */
+    fun onSelectGroup(groupId: String) {
+        _selectedGroupId.value = if (_selectedGroupId.value == groupId) null else groupId
     }
 
     /**
