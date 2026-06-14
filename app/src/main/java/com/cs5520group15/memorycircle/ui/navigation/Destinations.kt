@@ -16,6 +16,15 @@ import kotlinx.serialization.Serializable
 @Serializable object Friends
 @Serializable object Profile
 
+// Full-screen search overlay opened from the Friends screen's search bar.
+// Lets the user fuzzy-match friends (by name or email) and groups (by name).
+@Serializable object FriendsSearch
+
+// "See all" friend requests page — opened from the See all link in the Friends
+// tab's FRIEND REQUESTS section. Shows every request (pending/accepted/declined),
+// supports per-row swipe-to-dismiss.
+@Serializable object AllFriendRequests
+
 // Opens a group's collaborative timeline of memory time points (editable / live).
 @Serializable data class ScrapbookViewer(val groupId: String)
 

@@ -10,6 +10,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
+import com.cs5520group15.memorycircle.ui.friends.AllFriendRequestsScreen
+import com.cs5520group15.memorycircle.ui.friends.FriendsScreen
+import com.cs5520group15.memorycircle.ui.friends.FriendsSearchScreen
 import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
 import com.cs5520group15.memorycircle.ui.group.GroupDetailScreen
 import com.cs5520group15.memorycircle.ui.group.GroupMembersScreen
@@ -46,6 +49,7 @@ fun MemoryCircleNavigation() {
         val destination: Any? = when (route) {
             "home"     -> Home
             "memories" -> Memories
+            "friends"  -> Friends
             else       -> null
         }
         if (destination != null) {
@@ -176,6 +180,38 @@ fun MemoryCircleNavigation() {
                 groupId             = detail.groupId,
                 onBack              = { navController.popBackStack() },
                 onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ }
+            )
+        }
+
+        // Friends tab landing — header, search-bar entry point, friend requests,
+        // and the sticky Friends/Groups switcher with its two lists.
+        composable<Friends> {
+            FriendsScreen(
+                currentRoute        = currentRoute,
+                onNavigate          = onTabSelected,
+                onOpenSearch        = { navController.navigate(FriendsSearch) },
+                onOpenAllRequests   = { navController.navigate(AllFriendRequests) },
+                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onOpenGroupDetail   = { groupId -> navController.navigate(GroupDetail(groupId)) }
+            )
+        }
+
+        // Full list of every friend request, with per-row swipe-to-dismiss.
+        composable<AllFriendRequests> {
+            AllFriendRequestsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Full-screen friend / group search overlay opened from FriendsScreen.
+        // Friend result → profile (placeholder); group result → GroupDetail.
+        composable<FriendsSearch> {
+            FriendsSearchScreen(
+                onCancel             = { navController.popBackStack() },
+                onOpenMemberProfile  = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onOpenGroupDetail    = { groupId ->
+                    navController.navigate(GroupDetail(groupId))
+                }
             )
         }
 
