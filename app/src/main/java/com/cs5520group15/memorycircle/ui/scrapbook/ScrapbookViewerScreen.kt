@@ -36,12 +36,12 @@ import com.cs5520group15.memorycircle.ui.theme.*
  */
 @Composable
 fun ScrapbookViewerScreen(
-    groupId:        String,
-    onBack:         () -> Unit,
-    onOpenMembers:  () -> Unit,
-    onAddTimePoint: () -> Unit,
-    onJoinEntry:    (String) -> Unit,
-    viewModel:      ScrapbookViewerViewModel = viewModel()
+    groupId:           String,
+    onBack:            () -> Unit,
+    onOpenGroupDetail: () -> Unit,
+    onAddTimePoint:    () -> Unit,
+    onJoinEntry:       (String) -> Unit,
+    viewModel:         ScrapbookViewerViewModel = viewModel()
 ) {
     LaunchedEffect(groupId) { viewModel.bind(groupId) }
 
@@ -58,10 +58,10 @@ fun ScrapbookViewerScreen(
                 showBack = true,
                 onBack   = onBack,
                 actions  = {
-                    IconButton(onClick = onOpenMembers) {
+                    IconButton(onClick = onOpenGroupDetail) {
                         Icon(
-                            painter            = painterResource(R.drawable.ic_friends),
-                            contentDescription = "View group members"
+                            painter            = painterResource(R.drawable.ic_menu),
+                            contentDescription = "Open group details"
                         )
                     }
                 }
@@ -397,11 +397,11 @@ private fun CommentRow(comment: Comment) {
 fun ScrapbookViewerScreenPreview() {
     MemoryCircleTheme {
         ScrapbookViewerScreen(
-            groupId        = "test",
-            onBack         = {},
-            onOpenMembers  = {},
-            onAddTimePoint = {},
-            onJoinEntry    = {}
+            groupId           = "test",
+            onBack            = {},
+            onOpenGroupDetail = {},
+            onAddTimePoint    = {},
+            onJoinEntry       = {}
         )
     }
 }

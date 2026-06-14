@@ -11,6 +11,7 @@ import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
 import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
+import com.cs5520group15.memorycircle.ui.group.GroupDetailScreen
 import com.cs5520group15.memorycircle.ui.group.GroupMembersScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
@@ -126,11 +127,11 @@ fun MemoryCircleNavigation() {
         composable<ScrapbookViewer> { entry ->
             val detail = entry.toRoute<ScrapbookViewer>()
             ScrapbookViewerScreen(
-                groupId        = detail.groupId,
-                onBack         = { navController.popBackStack() },
-                onOpenMembers  = { navController.navigate(GroupMembers(detail.groupId)) },
-                onAddTimePoint = { navController.navigate(ScrapbookDetail(detail.groupId)) },
-                onJoinEntry    = { entryId ->
+                groupId           = detail.groupId,
+                onBack            = { navController.popBackStack() },
+                onOpenGroupDetail = { navController.navigate(GroupDetail(detail.groupId)) },
+                onAddTimePoint    = { navController.navigate(ScrapbookDetail(detail.groupId)) },
+                onJoinEntry       = { entryId ->
                     navController.navigate(ScrapbookDetail(detail.groupId, entryId))
                 }
             )
@@ -154,12 +155,32 @@ fun MemoryCircleNavigation() {
             )
         }
 
-        // A group's members page — placeholder for now (owned by a teammate)
+        // A group's flat members roster — reached via "View all members" on GroupDetail.
+        // onOpenMemberProfile is a no-op for now; the profile route is not yet built.
         composable<GroupMembers> { entry ->
             val detail = entry.toRoute<GroupMembers>()
             GroupMembersScreen(
-                groupId = detail.groupId,
-                onBack  = { navController.popBackStack() }
+                groupId             = detail.groupId,
+                onBack              = { navController.popBackStack() },
+                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ }
+            )
+        }
+
+        // A group's detail / settings page — opened from the menu icon on the timeline.
+        // Member-thumbnail taps and the invite "+" are no-ops until those screens exist.
+        composable<GroupDetail> { entry ->
+            val detail = entry.toRoute<GroupDetail>()
+            GroupDetailScreen(
+                groupId             = detail.groupId,
+                onBack              = { navController.popBackStack() },
+                onOpenAllMembers    = { navController.navigate(GroupMembers(detail.groupId)) },
+                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onInviteMember      = { /* TODO: navigate to InviteMember once the screen exists */ },
+                onOpenScrapbook     = { gid ->
+                    // For now every month routes back to the live group timeline.
+                    // When ScrapbookHistory lands this will switch to a month-aware route.
+                    navController.navigate(ScrapbookViewer(gid))
+                }
             )
         }
     }

@@ -29,5 +29,10 @@ import kotlinx.serialization.Serializable
 // Create-a-new-group flow (pick contacts) — opened from the Home "+" FAB
 @Serializable object CreateGroup
 
-// A group's members page — opened from the contacts icon on the timeline top bar
+// A group's members page — opened from the "View all members" link on GroupDetail
 @Serializable data class GroupMembers(val groupId: String)
+
+// A group's detail / settings page — opened from the menu icon on the timeline top bar.
+// Holds the group name, the member thumbnail grid (with a "view all" link), the
+// per-month scrapbook list for this group, and a "leave group" action in the top bar.
+@Serializable data class GroupDetail(val groupId: String)
