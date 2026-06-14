@@ -72,8 +72,12 @@ import kotlinx.serialization.Serializable
 
 @Serializable object Memories
 
-// Create-a-new-group flow (pick contacts) — opened from the Home "+" FAB
-@Serializable object CreateGroup
+// Create-a-new-group flow (pick contacts) — opened from the Home "+" FAB.
+// Re-used as the "invite new members" surface when reached from GroupDetail's
+// invite tile: isInviteMode flips the top-bar title and CTA label, and the
+// nav layer routes the confirm action back to the parent group instead of
+// minting a new ScrapbookViewer destination.
+@Serializable data class CreateGroup(val isInviteMode: Boolean = false)
 
 // A group's members page — opened from the "View all members" link on GroupDetail
 @Serializable data class GroupMembers(val groupId: String)

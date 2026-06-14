@@ -14,7 +14,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
+import com.cs5520group15.memorycircle.ui.common.GroupCard
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleBottomNav
+import com.cs5520group15.memorycircle.ui.common.SectionHeader
 import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
@@ -62,7 +64,6 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Greeting row
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -89,38 +90,32 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Section header
-            Row(
-                modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Text(
-                    text  = "RECENT GROUPS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Ink
-                )
-                TextButton(onClick = {}) {
-                    Text(
-                        text  = "See all",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Brown
-                    )
+            SectionHeader(
+                text = "RECENT GROUPS",
+                trailing = {
+                    TextButton(onClick = {}) {
+                        Text(
+                            text  = "See all",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Brown
+                        )
+                    }
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Groups list
-            // key = { it.id } so Compose tracks each card by its unique ID
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(groups, key = { it.id }) { group ->
                     GroupCard(
-                        group    = group,
-                        onClick  = { onOpenGroup(group.id) },
-                        modifier = Modifier.animateItem()
+                        name        = group.name,
+                        date        = group.date,
+                        memoryCount = group.memoryCount,
+                        colorType   = group.colorType,
+                        onClick     = { onOpenGroup(group.id) },
+                        modifier    = Modifier.animateItem()
                     )
                 }
             }

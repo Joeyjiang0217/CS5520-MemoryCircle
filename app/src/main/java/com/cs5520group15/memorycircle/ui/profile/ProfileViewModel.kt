@@ -1,6 +1,7 @@
 package com.cs5520group15.memorycircle.ui.profile
 
 import androidx.lifecycle.ViewModel
+import com.cs5520group15.memorycircle.data.ProfileRepository
 
 /**
  * What: Read-only wrapper exposing the current profile to ProfileScreen and

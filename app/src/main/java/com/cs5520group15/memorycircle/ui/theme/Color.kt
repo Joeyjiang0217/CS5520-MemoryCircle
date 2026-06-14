@@ -16,3 +16,6 @@ val BrownDisabled = Color(0x66B79F8A)  // Brown at 40% opacity
 val InkSecondary  = Color(0xB33A332B)  // Ink at 70% opacity
 val InkTertiary   = Color(0x993A332B)  // Ink at 60% opacity
 val WhiteCard     = Color(0xCCFFFFFF)  // White at 80% opacity
+
+// Destructive / warning
+val DeleteRed   = Color(0xFFC25B5B)

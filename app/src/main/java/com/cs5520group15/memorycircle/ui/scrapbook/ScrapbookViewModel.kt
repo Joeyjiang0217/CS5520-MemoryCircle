@@ -1,6 +1,9 @@
 package com.cs5520group15.memorycircle.ui.scrapbook
 
 import androidx.lifecycle.ViewModel
+import com.cs5520group15.memorycircle.data.CurrentUser
+import com.cs5520group15.memorycircle.data.ScrapbookRepository
+import com.cs5520group15.memorycircle.model.MemberContribution
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class ScrapbookViewModel : ViewModel() {
 
-    // --- State ---
     private val _title            = MutableStateFlow("")
     private val _description      = MutableStateFlow("")
     private val _tags             = MutableStateFlow<List<String>>(emptyList())
@@ -26,19 +28,11 @@ class ScrapbookViewModel : ViewModel() {
     val tags:             StateFlow<List<String>> = _tags.asStateFlow()
     val selectedPhotoUri: StateFlow<String?>      = _selectedPhotoUri.asStateFlow()
 
-    // In join mode this is set; title + tags are then pre-filled and read-only.
     private var joinEntryId: String? = null
     private var loaded = false
 
     val isJoinMode: Boolean get() = joinEntryId != null
 
-    /**
-     * What: Pre-loads title + tags from an existing entry when joining it, so the
-     *       creator's title/tags show (read-only) while the user adds their own
-     *       photo + description. No-op when creating a new time point.
-     * Who: Called by ScrapbookScreen on first composition.
-     * When: Once per ViewModel.
-     */
     fun loadIfNeeded(groupId: String, entryId: String?) {
         if (loaded) return
         loaded = true
@@ -55,10 +49,6 @@ class ScrapbookViewModel : ViewModel() {
     fun onDescriptionChange(value: String) { _description.value = value }
     fun onPhotoSelected(uri: String)       { _selectedPhotoUri.value = uri }
 
-    /**
-     * What: Adds a "#"-prefixed tag (new-entry mode only).
-     * Who: Called by ScrapbookScreen's add-tag input.
-     */
     fun onAddTag(tag: String) {
         if (tag.isBlank()) return
         _tags.value = _tags.value + "#${tag.removePrefix("#")}"

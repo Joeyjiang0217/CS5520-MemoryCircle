@@ -1,6 +1,7 @@
 package com.cs5520group15.memorycircle.ui.friends
 
 import androidx.lifecycle.ViewModel
+import com.cs5520group15.memorycircle.data.FriendsRepository
 
 /**
  * What: Thin wrapper exposing the shared FriendsRepository state to the Friends

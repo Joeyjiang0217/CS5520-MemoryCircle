@@ -1,8 +1,6 @@
 package com.cs5520group15.memorycircle.ui.memories
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleBottomNav
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
+import com.cs5520group15.memorycircle.ui.common.MonthScrapbookRow
 import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
@@ -66,7 +65,6 @@ fun MemoriesScreen(
                 )
             }
 
-            // One section per month, each holding that month's scrapbooks
             items(months, key = { it.month + it.year }) { section ->
                 MonthSection(
                     section         = section,
@@ -123,62 +121,13 @@ private fun MonthSection(
 
         // Scrapbooks generated for this month (one per group)
         section.scrapbooks.forEach { scrapbook ->
-            ScrapbookCard(
-                scrapbook = scrapbook,
-                onClick   = { onOpenScrapbook(scrapbook) }
+            MonthScrapbookRow(
+                title       = scrapbook.groupName,
+                memoryCount = scrapbook.memoryCount,
+                colorType   = scrapbook.colorType,
+                onClick     = { onOpenScrapbook(scrapbook) }
             )
         }
-    }
-}
-
-/**
- * What: A single generated scrapbook card inside a month section.
- *       Shows which group it belongs to and how many memories it holds.
- * Who: Called by MonthSection for each scrapbook.
- * When: Rendered for every scrapbook in a month.
- */
-@Composable
-private fun ScrapbookCard(
-    scrapbook: MemoriesViewModel.Scrapbook,
-    onClick:   () -> Unit
-) {
-    val accent = if (scrapbook.colorType == "sage") Sage else Brown
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(WhiteCard)
-            .border(1.dp, Beige.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
-            .clickable { onClick() }
-            .padding(16.dp)
-    ) {
-        // Color accent chip
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(accent.copy(alpha = 0.85f))
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text  = scrapbook.groupName,
-                style = MaterialTheme.typography.titleLarge,
-                color = Ink
-            )
-            Text(
-                text  = "📷 ${scrapbook.memoryCount} memories",
-                style = MaterialTheme.typography.bodyMedium,
-                color = InkTertiary
-            )
-        }
-        Text(
-            text  = "›",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Brown
-        )
     }
 }
 

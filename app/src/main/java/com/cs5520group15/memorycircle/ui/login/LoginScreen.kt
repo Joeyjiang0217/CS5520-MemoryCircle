@@ -1,0 +1,225 @@
+package com.cs5520group15.memorycircle.ui.login
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.ui.common.PrimaryButton
+import com.cs5520group15.memorycircle.ui.common.brandFieldColorsOnGradient
+import com.cs5520group15.memorycircle.ui.theme.*
+import kotlinx.coroutines.flow.collectLatest
+
+/**
+ * What: Login screen where users enter email and password to sign in.
+ * Who: Called by MemoryCircleNavigation as the start destination.
+ * When: Shown when the app first launches.
+ */
+@Composable
+fun LoginScreen(
+    onLoginSuccess:      () -> Unit,
+    onNavigateToRegister: () -> Unit,
+    viewModel: LoginViewModel = viewModel()
+) {
+    val email     by viewModel.email.collectAsStateWithLifecycle()
+    val password  by viewModel.password.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+
+    var passwordVisible by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collectLatest { event ->
+            when (event) {
+                is LoginViewModel.LoginEvent.ShowSnackbar  -> snackbarHostState.showSnackbar(event.message)
+                is LoginViewModel.LoginEvent.NavigateToHome -> onLoginSuccess()
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Cream
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Beige, Cream),
+                        startY = 0f,
+                        endY   = 900f
+                    )
+                )
+                .padding(horizontal = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(80.dp))
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(72.dp)
+                    .background(Color.White, CircleShape)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_favorite),
+                    contentDescription = "Logo",
+                    tint = Brown,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text  = "MemoryCircle",
+                style = MaterialTheme.typography.displayLarge,
+                color = Ink
+            )
+            Text(
+                text  = "cherish every moment",
+                style = MaterialTheme.typography.bodyMedium,
+                color = InkTertiary
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text      = "Welcome back,\nyour memories await",
+                style     = MaterialTheme.typography.titleLarge,
+                color     = Ink,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
+
+            Text(
+                text     = "EMAIL",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = InkSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value         = email,
+                onValueChange = viewModel::onEmailChange,
+                modifier      = Modifier.fillMaxWidth(),
+                shape         = RoundedCornerShape(28.dp),
+                placeholder   = { Text("sarah@example.com", color = Brown.copy(alpha = 0.6f)) },
+                leadingIcon   = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_email),
+                        contentDescription = null,
+                        tint = Brown
+                    )
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine    = true,
+                colors        = brandFieldColorsOnGradient()
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text     = "PASSWORD",
+                style    = MaterialTheme.typography.labelSmall,
+                color    = InkSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value         = password,
+                onValueChange = viewModel::onPasswordChange,
+                modifier      = Modifier.fillMaxWidth(),
+                shape         = RoundedCornerShape(28.dp),
+                placeholder   = { Text("••••••••", color = Brown.copy(alpha = 0.6f)) },
+                leadingIcon   = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_lock),
+                        contentDescription = null,
+                        tint = Brown
+                    )
+                },
+                trailingIcon  = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            painter = painterResource(
+                                if (passwordVisible) R.drawable.ic_visibility
+                                else R.drawable.ic_visibility_off
+                            ),
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            tint = Brown
+                        )
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None
+                else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine    = true,
+                colors        = brandFieldColorsOnGradient()
+            )
+
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                TextButton(onClick = {}) {
+                    Text("Forgot password?", color = Brown, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            PrimaryButton(
+                label   = "Sign In",
+                onClick = viewModel::onLoginClick,
+                loading = isLoading
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text(
+                    "New to MemoryCircle? ",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = InkTertiary
+                )
+                TextButton(onClick = onNavigateToRegister) {
+                    Text(
+                        "Create Account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AccentGreen
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LoginScreenPreview() {
+    MemoryCircleTheme {
+        LoginScreen(onLoginSuccess = {}, onNavigateToRegister = {})
+    }
+}

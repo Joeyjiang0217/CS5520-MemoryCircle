@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -23,6 +22,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
+import com.cs5520group15.memorycircle.ui.common.PrimaryButton
+import com.cs5520group15.memorycircle.ui.common.SectionHeader
+import com.cs5520group15.memorycircle.ui.common.brandFieldColors
+import com.cs5520group15.memorycircle.ui.common.brandFieldColorsOnGradient
 import com.cs5520group15.memorycircle.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -60,15 +63,11 @@ fun ScrapbookScreen(
     var newTagInput by remember { mutableStateOf("") }
     var showAddTag  by remember { mutableStateOf(false) }
 
-    // Android Photo Picker — no runtime permission needed.
     val pickPhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) viewModel.onPhotoSelected(uri.toString()) }
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor   = Sage,
-        unfocusedBorderColor = Beige
-    )
+    val fieldColors = brandFieldColors()
 
     Scaffold(
         containerColor = Cream,
@@ -89,10 +88,9 @@ fun ScrapbookScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
 
-            // --- Date (new entries are dated today; join inherits the existing day) ---
             if (!isJoinMode) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SectionLabel("DATE")
+                    SectionHeader(text = "DATE")
                     Text(
                         text  = today,
                         style = MaterialTheme.typography.titleMedium,
@@ -101,9 +99,8 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Title (editable when creating, read-only when joining) ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionLabel("TITLE")
+                SectionHeader(text = "TITLE")
                 if (isJoinMode) {
                     Text(
                         text  = title.ifBlank { "Untitled" },
@@ -123,16 +120,14 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Tags ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionLabel("TAGS")
+                SectionHeader(text = "TAGS")
                 FlowRow(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement   = Arrangement.spacedBy(8.dp)
                 ) {
                     if (isJoinMode) {
-                        // Inherited tags, read-only
                         if (tags.isEmpty()) {
                             Text(
                                 text  = "No tags",
@@ -178,9 +173,8 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Photo from album (one per person) ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionLabel("YOUR PHOTO")
+                SectionHeader(text = "YOUR PHOTO")
                 val currentPhoto = photoUri
                 if (currentPhoto == null) {
                     Box(
@@ -223,9 +217,8 @@ fun ScrapbookScreen(
                 }
             }
 
-            // --- Your description ---
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SectionLabel("YOUR DESCRIPTION")
+                SectionHeader(text = "YOUR DESCRIPTION")
                 OutlinedTextField(
                     value         = description,
                     onValueChange = viewModel::onDescriptionChange,
@@ -240,38 +233,20 @@ fun ScrapbookScreen(
                             color = Brown.copy(alpha = 0.5f)
                         )
                     },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor      = Sage,
-                        unfocusedBorderColor    = Beige,
-                        focusedContainerColor   = Color.White.copy(alpha = 0.8f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.8f)
-                    )
+                    colors = brandFieldColorsOnGradient()
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Save Button ---
-            Button(
-                onClick  = {
+            PrimaryButton(
+                label   = if (isJoinMode) "✦  Add to Timeline" else "✦  Create Memory",
+                onClick = {
                     viewModel.save(groupId, today)
                     onSaved()
                 },
-                enabled  = viewModel.canSave,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape  = RoundedCornerShape(28.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Ink,
-                    contentColor   = Cream
-                )
-            ) {
-                Text(
-                    text  = if (isJoinMode) "✦  Add to Timeline" else "✦  Create Memory",
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
+                enabled = viewModel.canSave
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -279,18 +254,8 @@ fun ScrapbookScreen(
 }
 
 /**
- * What: A small uppercase section header used throughout the creation form.
- * Who: Called by ScrapbookScreen for each section.
- */
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text = text, style = MaterialTheme.typography.labelSmall, color = InkSecondary)
-}
-
-/**
  * What: Displays a single tag as a removable chip.
  * Who: Called by ScrapbookScreen for each editable tag.
- * When: Rendered for every tag in new-entry mode.
  */
 @Composable
 fun TagChip(label: String, onRemove: () -> Unit) {
@@ -324,7 +289,6 @@ fun ReadOnlyTagChip(label: String) {
 /**
  * What: Displays a dashed "+ Add tag" chip button.
  * Who: Called by ScrapbookScreen to let users add new tags.
- * When: Rendered after the existing tag chips in new-entry mode.
  */
 @Composable
 fun AddTagChip(onClick: () -> Unit) {
