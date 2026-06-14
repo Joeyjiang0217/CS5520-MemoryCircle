@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -75,6 +76,12 @@ fun FriendsScreen(
 
     val listState = rememberLazyListState()
     val scope     = rememberCoroutineScope()
+
+    // Tab bar height in pixels — used as a negative scrollOffset when jumping
+    // to a section, so the section letter lands JUST BELOW the sticky tab bar
+    // instead of being hidden behind it. ~54dp matches ContactsTabRow's layout
+    // (Cormorant title + 4dp gap + 2dp underline + 10dp vertical padding × 2).
+    val tabBarHeightPx = with(LocalDensity.current) { 54.dp.roundToPx() }
 
     // Item-index bookkeeping. The LazyColumn layout is built in this exact order
     // so the indices below match — keep this in sync if you add/remove items.
@@ -207,7 +214,15 @@ fun FriendsScreen(
                     availableLetters = sectionIndices.keys,
                     onLetterTap      = { letter ->
                         sectionIndices[letter]?.let { idx ->
-                            scope.launch { listState.animateScrollToItem(idx) }
+                            scope.launch {
+                                // Negative offset so the section letter ends up
+                                // tabBarHeightPx below the viewport top — i.e. just
+                                // under the sticky tab bar, not behind it.
+                                listState.animateScrollToItem(
+                                    index        = idx,
+                                    scrollOffset = -tabBarHeightPx
+                                )
+                            }
                         }
                     },
                     onStarTap        = {

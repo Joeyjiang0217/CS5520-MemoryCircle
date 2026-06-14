@@ -1,5 +1,6 @@
 package com.cs5520group15.memorycircle.ui.group
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,6 +97,13 @@ fun GroupDetailScreen(
                     onSeeAllClick       = onOpenAllMembers,
                     onInviteClick       = onInviteMember
                 )
+            }
+
+            item {
+                // Secondary entry point for the same flow the top-bar ic_leave
+                // action triggers — both routes feed the same showLeaveDialog
+                // state so the confirmation behaviour stays single-sourced.
+                LeaveGroupButton(onClick = { showLeaveDialog = true })
             }
 
             item {
@@ -387,9 +395,40 @@ private fun MonthScrapbookRow(
 }
 
 /**
+ * What: Full-width outlined "Leave group" button placed between the members card
+ *       and the scrapbook list. Triggers the SAME confirmation dialog as the
+ *       top-bar ic_leave action — the dialog itself owns the destructive flow,
+ *       this button is just a more discoverable entry point lower on the page.
+ * Who: Called by GroupDetailScreen.
+ * When: Rendered once below the members card.
+ */
+@Composable
+private fun LeaveGroupButton(onClick: () -> Unit) {
+    OutlinedButton(
+        onClick  = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(20.dp),
+        border   = BorderStroke(1.dp, Brown.copy(alpha = 0.5f))
+    ) {
+        Icon(
+            painter            = painterResource(R.drawable.ic_leave),
+            contentDescription = null,
+            tint               = Brown
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text  = "Leave group",
+            style = MaterialTheme.typography.labelLarge,
+            color = Brown
+        )
+    }
+}
+
+/**
  * What: Confirmation dialog shown before the user actually leaves a group. The
  *       user must tap "Yes, leave" to commit; "Cancel" or tapping outside dismisses.
- * Who: Called by GroupDetailScreen when the top-bar leave icon is tapped.
+ * Who: Called by GroupDetailScreen when the top-bar leave icon or the in-body
+ *       Leave-group button is tapped.
  * When: While showLeaveDialog is true.
  */
 @Composable
