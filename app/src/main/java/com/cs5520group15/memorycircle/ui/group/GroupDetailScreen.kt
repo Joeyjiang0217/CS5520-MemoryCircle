@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -26,6 +27,15 @@ import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
+
+/**
+ * Muted warm red used for the destructive "leave group" affordances on this
+ * screen — the top-bar ic_leave icon, the inline Leave-group button, and the
+ * "Yes, leave" dialog confirm. Same hex as AllFriendRequestsScreen's DeleteRed
+ * so destructive UI across the app reads consistently. Kept private here
+ * until the brand palette formally adopts a danger color.
+ */
+private val DeleteRed = Color(0xFFC25B5B)
 
 /**
  * What: A group's "settings/details" page reached from the menu icon on the
@@ -72,7 +82,7 @@ fun GroupDetailScreen(
                         Icon(
                             painter            = painterResource(R.drawable.ic_leave),
                             contentDescription = "Leave group",
-                            tint               = Brown
+                            tint               = DeleteRed
                         )
                     }
                 }
@@ -408,18 +418,18 @@ private fun LeaveGroupButton(onClick: () -> Unit) {
         onClick  = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape    = RoundedCornerShape(20.dp),
-        border   = BorderStroke(1.dp, Brown.copy(alpha = 0.5f))
+        border   = BorderStroke(1.dp, DeleteRed.copy(alpha = 0.6f))
     ) {
         Icon(
             painter            = painterResource(R.drawable.ic_leave),
             contentDescription = null,
-            tint               = Brown
+            tint               = DeleteRed
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text  = "Leave group",
             style = MaterialTheme.typography.labelLarge,
-            color = Brown
+            color = DeleteRed
         )
     }
 }
