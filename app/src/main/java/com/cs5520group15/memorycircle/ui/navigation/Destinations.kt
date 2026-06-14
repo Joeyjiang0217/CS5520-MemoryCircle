@@ -25,6 +25,14 @@ import kotlinx.serialization.Serializable
 // supports per-row swipe-to-dismiss.
 @Serializable object AllFriendRequests
 
+// "Add new friend" landing page — opened from the person-add icon on the
+// Friends tab hero. Holds only a tap-only search bar.
+@Serializable object AddFriend
+
+// Active "add friend" search overlay — opened by tapping the search bar on
+// AddFriendScreen. Auto-focuses the TextField; results are people only.
+@Serializable object AddFriendSearch
+
 // Opens a group's collaborative timeline of memory time points (editable / live).
 @Serializable data class ScrapbookViewer(val groupId: String)
 

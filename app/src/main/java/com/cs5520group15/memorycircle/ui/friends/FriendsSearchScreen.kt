@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +19,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -72,6 +75,7 @@ fun FriendsSearchScreen(
                 query           = query,
                 onQueryChange   = viewModel::onQueryChange,
                 focusRequester  = focusRequester,
+                onSearch        = { keyboard?.hide() },
                 onCancel        = {
                     keyboard?.hide()
                     onCancel()
@@ -114,6 +118,7 @@ private fun SearchFieldRow(
     query:          String,
     onQueryChange:  (String) -> Unit,
     focusRequester: FocusRequester,
+    onSearch:       () -> Unit,
     onCancel:       () -> Unit
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -139,6 +144,11 @@ private fun SearchFieldRow(
                     tint               = Brown
                 )
             },
+            // Match the soft keyboard's enter key to the screen's intent —
+            // pressing it tucks the keyboard away (results are already live
+            // as the user types, so there's nothing extra to commit).
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
             colors        = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor   = Sage,
                 unfocusedBorderColor = Beige

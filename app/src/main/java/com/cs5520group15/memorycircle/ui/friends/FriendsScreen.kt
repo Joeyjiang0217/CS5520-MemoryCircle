@@ -51,6 +51,7 @@ fun FriendsScreen(
     onNavigate:          (Any) -> Unit,
     onOpenSearch:        () -> Unit,
     onOpenAllRequests:   () -> Unit,
+    onOpenAddFriend:     () -> Unit,
     onOpenMemberProfile: (String) -> Unit,
     onOpenGroupDetail:   (String) -> Unit,
     viewModel:           FriendsViewModel = viewModel()
@@ -133,9 +134,10 @@ fun FriendsScreen(
             ) {
                 item(key = "header") {
                     Header(
-                        friendCount = friends.size,
-                        groupCount  = groups.size,
-                        modifier    = Modifier.padding(horizontal = 24.dp)
+                        friendCount    = friends.size,
+                        groupCount     = groups.size,
+                        onAddFriendTap = onOpenAddFriend,
+                        modifier       = Modifier.padding(horizontal = 24.dp)
                     )
                     Spacer(modifier = Modifier.height(20.dp))
                 }
@@ -274,22 +276,35 @@ private enum class ContactsTab { FRIENDS, GROUPS }
  */
 @Composable
 private fun Header(
-    friendCount: Int,
-    groupCount:  Int,
-    modifier:    Modifier = Modifier
+    friendCount:    Int,
+    groupCount:     Int,
+    onAddFriendTap: () -> Unit,
+    modifier:       Modifier = Modifier
 ) {
-    Column(modifier = modifier) {
-        Text(
-            text  = "Friends & Groups",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Ink
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text  = "$friendCount friends · $groupCount groups",
-            style = MaterialTheme.typography.bodyMedium,
-            color = InkSecondary
-        )
+    Row(
+        modifier          = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text  = "Friends & Groups",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Ink
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text  = "$friendCount friends · $groupCount groups",
+                style = MaterialTheme.typography.bodyMedium,
+                color = InkSecondary
+            )
+        }
+        IconButton(onClick = onAddFriendTap) {
+            Icon(
+                painter            = painterResource(R.drawable.ic_personadd),
+                contentDescription = "Add new friend",
+                tint               = Ink
+            )
+        }
     }
 }
 
@@ -731,6 +746,7 @@ fun FriendsScreenPreview() {
             onNavigate          = {},
             onOpenSearch        = {},
             onOpenAllRequests   = {},
+            onOpenAddFriend     = {},
             onOpenMemberProfile = {},
             onOpenGroupDetail   = {}
         )

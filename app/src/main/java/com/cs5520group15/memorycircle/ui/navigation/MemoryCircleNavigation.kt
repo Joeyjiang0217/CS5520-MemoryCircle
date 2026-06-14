@@ -10,6 +10,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.ui.auth.LoginScreen
 import com.cs5520group15.memorycircle.ui.auth.RegisterScreen
+import com.cs5520group15.memorycircle.ui.friends.AddFriendScreen
+import com.cs5520group15.memorycircle.ui.friends.AddFriendSearchScreen
 import com.cs5520group15.memorycircle.ui.friends.AllFriendRequestsScreen
 import com.cs5520group15.memorycircle.ui.friends.FriendsScreen
 import com.cs5520group15.memorycircle.ui.friends.FriendsSearchScreen
@@ -191,8 +193,25 @@ fun MemoryCircleNavigation() {
                 onNavigate          = onTabSelected,
                 onOpenSearch        = { navController.navigate(FriendsSearch) },
                 onOpenAllRequests   = { navController.navigate(AllFriendRequests) },
+                onOpenAddFriend     = { navController.navigate(AddFriend) },
                 onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
                 onOpenGroupDetail   = { groupId -> navController.navigate(GroupDetail(groupId)) }
+            )
+        }
+
+        // "Add new friend" landing — just a tap-only search bar.
+        composable<AddFriend> {
+            AddFriendScreen(
+                onBack       = { navController.popBackStack() },
+                onOpenSearch = { navController.navigate(AddFriendSearch) }
+            )
+        }
+
+        // Active "add friend" search overlay — auto-focused TextField + Cancel.
+        composable<AddFriendSearch> {
+            AddFriendSearchScreen(
+                onCancel            = { navController.popBackStack() },
+                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ }
             )
         }
 

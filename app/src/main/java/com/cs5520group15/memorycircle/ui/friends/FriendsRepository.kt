@@ -19,13 +19,31 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object FriendsRepository {
 
-    private val _friends  = MutableStateFlow<List<Friend>>(emptyList())
-    private val _requests = MutableStateFlow<List<FriendRequest>>(emptyList())
-    private val _groups   = MutableStateFlow<List<GroupSummary>>(emptyList())
+    private val _friends           = MutableStateFlow<List<Friend>>(emptyList())
+    private val _requests          = MutableStateFlow<List<FriendRequest>>(emptyList())
+    private val _groups            = MutableStateFlow<List<GroupSummary>>(emptyList())
+    private val _discoverableUsers = MutableStateFlow<List<Friend>>(emptyList())
+    private val _invitedUserIds    = MutableStateFlow<Set<String>>(emptySet())
 
-    val friends:  StateFlow<List<Friend>>        = _friends.asStateFlow()
-    val requests: StateFlow<List<FriendRequest>> = _requests.asStateFlow()
-    val groups:   StateFlow<List<GroupSummary>>  = _groups.asStateFlow()
+    val friends:           StateFlow<List<Friend>>        = _friends.asStateFlow()
+    val requests:          StateFlow<List<FriendRequest>> = _requests.asStateFlow()
+    val groups:            StateFlow<List<GroupSummary>>  = _groups.asStateFlow()
+
+    /**
+     * What: Broader pool of users the current user can find via "add new friend"
+     *       search — INCLUDES current friends (they render with an "Added" pill
+     *       so the user knows not to invite again) plus strangers seeded for
+     *       demo purposes. Reuses the Friend type for shape compatibility;
+     *       stranger entries simply have sharedMemories = 0 and isOnline = false.
+     */
+    val discoverableUsers: StateFlow<List<Friend>>        = _discoverableUsers.asStateFlow()
+
+    /**
+     * What: IDs of users the current user has sent a friend invitation to but
+     *       who have not yet been added to the friend list. Drives the
+     *       "Invitation sent" locked pill on AddFriendSearchScreen.
+     */
+    val invitedUserIds:    StateFlow<Set<String>>         = _invitedUserIds.asStateFlow()
 
     init { seedMock() }
 
@@ -67,6 +85,21 @@ object FriendsRepository {
     }
 
     /**
+     * What: Records that the current user has sent a friend invitation to the
+     *       given userId. No-op if they are already a friend (nothing to invite)
+     *       or have already been invited (idempotent — keeps re-tapping "Add"
+     *       safe). The "Add new friend" search screen reads invitedUserIds to
+     *       decide whether to render Add / Invitation sent / Added pills.
+     * Who: Called by AddFriendSearchViewModel.invite.
+     * When: On every tap of the Add button on a search result.
+     */
+    fun invite(userId: String) {
+        if (_friends.value.any { it.id == userId }) return
+        if (userId in _invitedUserIds.value) return
+        _invitedUserIds.value = _invitedUserIds.value + userId
+    }
+
+    /**
      * What: Hard-removes a request entry from the requests list. INVARIANT:
      *       never touches the friends list. An already-befriended user stays
      *       a friend even when their accepted-request row is wiped from
@@ -96,6 +129,22 @@ object FriendsRepository {
             Friend("u_leo",   "Leo Park",     "leo.park@gmail.com",            12),
             Friend("u_isla",  "Isla Hughes",  "isla.hughes@northeastern.edu",   3)
         )
+        // Mock pool the "Add new friend" search runs against. Includes the
+        // current friends so the screen can show "Added" pills for them, plus
+        // a handful of strangers reachable by name or email.
+        _discoverableUsers.value = _friends.value + listOf(
+            Friend("u_zed",    "Zed",        "zed@gmail.com",            0),
+            Friend("u_sonder", "Sonder",     "sonder@gmail.com",         0),
+            Friend("u_chieh",  "Chieh",      "chieh@northeastern.edu",   0),
+            Friend("u_yeling", "Ye Ling",    "yeling@gmail.com",         0),
+            Friend("u_poi",    "Poi",        "poi@outlook.com",          0),
+            Friend("u_yj",     "Yang Jugen", "yangjugen@gmail.com",      0),
+            Friend("u_happy",  "Happy Day",  "happyday@gmail.com",       0),
+            Friend("u_robin",  "Robin Lee",  "robin.lee@gmail.com",      0),
+            Friend("u_ivy",    "Ivy Wang",   "ivy.wang@protonmail.com",  0),
+            Friend("u_max",    "Max Foster", "max.foster@outlook.com",   0)
+        )
+
         // Mock groups — same shape used by FriendsSearchViewModel so the demo
         // stays coherent across the search results and the group tab.
         _groups.value = listOf(
