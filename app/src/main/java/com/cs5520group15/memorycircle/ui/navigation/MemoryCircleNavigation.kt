@@ -15,10 +15,16 @@ import com.cs5520group15.memorycircle.ui.friends.AddFriendSearchScreen
 import com.cs5520group15.memorycircle.ui.friends.AllFriendRequestsScreen
 import com.cs5520group15.memorycircle.ui.friends.FriendsScreen
 import com.cs5520group15.memorycircle.ui.friends.FriendsSearchScreen
+import com.cs5520group15.memorycircle.ui.friends.MemberProfileScreen
 import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
 import com.cs5520group15.memorycircle.ui.group.GroupDetailScreen
 import com.cs5520group15.memorycircle.ui.group.GroupMembersScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
+import com.cs5520group15.memorycircle.ui.profile.AvatarViewerScreen
+import com.cs5520group15.memorycircle.ui.profile.EditProfileScreen
+import com.cs5520group15.memorycircle.ui.profile.NotificationSettingsScreen
+import com.cs5520group15.memorycircle.ui.profile.ProfileScreen
+import com.cs5520group15.memorycircle.ui.profile.SettingsScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookHistoryScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
@@ -52,6 +58,7 @@ fun MemoryCircleNavigation() {
             "home"     -> Home
             "memories" -> Memories
             "friends"  -> Friends
+            "profile"  -> Profile
             else       -> null
         }
         if (destination != null) {
@@ -175,13 +182,12 @@ fun MemoryCircleNavigation() {
         }
 
         // A group's flat members roster — reached via "View all members" on GroupDetail.
-        // onOpenMemberProfile is a no-op for now; the profile route is not yet built.
         composable<GroupMembers> { entry ->
             val detail = entry.toRoute<GroupMembers>()
             GroupMembersScreen(
                 groupId             = detail.groupId,
                 onBack              = { navController.popBackStack() },
-                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ }
+                onOpenMemberProfile = { userId -> navController.navigate(MemberProfile(userId)) }
             )
         }
 
@@ -194,7 +200,7 @@ fun MemoryCircleNavigation() {
                 onOpenSearch        = { navController.navigate(FriendsSearch) },
                 onOpenAllRequests   = { navController.navigate(AllFriendRequests) },
                 onOpenAddFriend     = { navController.navigate(AddFriend) },
-                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onOpenMemberProfile = { userId -> navController.navigate(MemberProfile(userId)) },
                 onOpenGroupDetail   = { groupId -> navController.navigate(GroupDetail(groupId)) }
             )
         }
@@ -211,7 +217,68 @@ fun MemoryCircleNavigation() {
         composable<AddFriendSearch> {
             AddFriendSearchScreen(
                 onCancel            = { navController.popBackStack() },
-                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ }
+                onOpenMemberProfile = { userId -> navController.navigate(MemberProfile(userId)) }
+            )
+        }
+
+        // Profile tab landing — avatar, name, bio, email, Edit Profile CTA,
+        // and a Settings entry row below.
+        composable<Profile> {
+            ProfileScreen(
+                currentRoute      = currentRoute,
+                onNavigate        = onTabSelected,
+                onOpenEditProfile = { navController.navigate(EditProfile) },
+                onOpenSettings    = { navController.navigate(Settings) }
+            )
+        }
+
+        // Profile edit form — opens dialogs for name / bio / email edits.
+        // Avatar row navigates into the full-size AvatarViewer.
+        composable<EditProfile> {
+            EditProfileScreen(
+                onBack             = { navController.popBackStack() },
+                onOpenAvatarViewer = { navController.navigate(AvatarViewer) }
+            )
+        }
+
+        // Full-size avatar viewer with a more-options action menu.
+        composable<AvatarViewer> {
+            AvatarViewerScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Settings hub — Profile / Notifications / Log out.
+        composable<Settings> {
+            SettingsScreen(
+                onBack                      = { navController.popBackStack() },
+                onOpenProfile               = { navController.navigate(EditProfile) },
+                onOpenNotificationSettings  = { navController.navigate(NotificationSettings) },
+                onLogout                    = {
+                    // After confirming log-out: clear the entire back stack
+                    // (so back-button from Login can't sneak the user back into
+                    // an authenticated screen) and land on Login.
+                    navController.navigate(Login) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // Notification toggles — friend requests, group activity, memory posts.
+        composable<NotificationSettings> {
+            NotificationSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Read-only profile for a friend / search result / group member /
+        // request sender. Email is privacy-masked on this surface.
+        composable<MemberProfile> { entry ->
+            val detail = entry.toRoute<MemberProfile>()
+            MemberProfileScreen(
+                userId = detail.userId,
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -227,7 +294,7 @@ fun MemoryCircleNavigation() {
         composable<FriendsSearch> {
             FriendsSearchScreen(
                 onCancel             = { navController.popBackStack() },
-                onOpenMemberProfile  = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onOpenMemberProfile  = { userId -> navController.navigate(MemberProfile(userId)) },
                 onOpenGroupDetail    = { groupId ->
                     navController.navigate(GroupDetail(groupId))
                 }
@@ -242,7 +309,7 @@ fun MemoryCircleNavigation() {
                 groupId             = detail.groupId,
                 onBack              = { navController.popBackStack() },
                 onOpenAllMembers    = { navController.navigate(GroupMembers(detail.groupId)) },
-                onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
+                onOpenMemberProfile = { userId -> navController.navigate(MemberProfile(userId)) },
                 onInviteMember      = { /* TODO: navigate to InviteMember once the screen exists */ },
                 onOpenScrapbook     = { gid, month, year ->
                     // GroupDetail's per-month list shows PAST scrapbooks → read-only view.

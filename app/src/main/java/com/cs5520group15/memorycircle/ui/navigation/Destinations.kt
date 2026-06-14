@@ -33,6 +33,26 @@ import kotlinx.serialization.Serializable
 // AddFriendScreen. Auto-focuses the TextField; results are people only.
 @Serializable object AddFriendSearch
 
+// Profile edit form — opened from the "Edit Profile" button on ProfileScreen.
+// Holds rows for avatar, name, bio, email; each row is tap-to-edit.
+@Serializable object EditProfile
+
+// Full-size avatar viewer — opened from the Avatar row on EditProfile. Top
+// bar carries a more-options icon that surfaces pick / save / cancel.
+@Serializable object AvatarViewer
+
+// Account settings hub — opened from the Settings row on EditProfile. Holds
+// Profile, Notifications, and Log out.
+@Serializable object Settings
+
+// Notification toggles — opened from the Notifications row on Settings.
+@Serializable object NotificationSettings
+
+// Read-only profile view for someone OTHER than the current user — opened by
+// tapping any friend/member/result/request row across the app. Email is
+// privacy-masked on this surface.
+@Serializable data class MemberProfile(val userId: String)
+
 // Opens a group's collaborative timeline of memory time points (editable / live).
 @Serializable data class ScrapbookViewer(val groupId: String)
 
