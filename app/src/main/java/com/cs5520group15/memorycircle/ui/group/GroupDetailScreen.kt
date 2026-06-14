@@ -48,7 +48,7 @@ fun GroupDetailScreen(
     onOpenAllMembers:     () -> Unit,
     onOpenMemberProfile:  (String) -> Unit,
     onInviteMember:       () -> Unit,
-    onOpenScrapbook:      (String) -> Unit,
+    onOpenScrapbook:      (groupId: String, month: String, year: String) -> Unit,
     viewModel:            GroupDetailViewModel = viewModel()
 ) {
     LaunchedEffect(groupId) { viewModel.bind(groupId) }
@@ -109,7 +109,7 @@ fun GroupDetailScreen(
             items(months, key = { it.id }) { month ->
                 MonthScrapbookRow(
                     month   = month,
-                    onClick = { onOpenScrapbook(groupId) }
+                    onClick = { onOpenScrapbook(groupId, month.month, month.year) }
                 )
             }
         }
@@ -449,7 +449,7 @@ fun GroupDetailScreenPreview() {
             onOpenAllMembers    = {},
             onOpenMemberProfile = {},
             onInviteMember      = {},
-            onOpenScrapbook     = {}
+            onOpenScrapbook     = { _, _, _ -> }
         )
     }
 }

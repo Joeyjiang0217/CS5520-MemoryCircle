@@ -14,6 +14,7 @@ import com.cs5520group15.memorycircle.ui.group.CreateGroupScreen
 import com.cs5520group15.memorycircle.ui.group.GroupDetailScreen
 import com.cs5520group15.memorycircle.ui.group.GroupMembersScreen
 import com.cs5520group15.memorycircle.ui.home.HomeScreen
+import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookHistoryScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookScreen
 import com.cs5520group15.memorycircle.ui.scrapbook.ScrapbookViewerScreen
 import com.cs5520group15.memorycircle.ui.memories.MemoriesScreen
@@ -123,6 +124,18 @@ fun MemoryCircleNavigation() {
             )
         }
 
+        // Read-only historical view of one month's scrapbook for a group.
+        // Opened from the Memories calendar and from the per-month list on GroupDetail.
+        composable<ScrapbookHistory> { entry ->
+            val detail = entry.toRoute<ScrapbookHistory>()
+            ScrapbookHistoryScreen(
+                groupId = detail.groupId,
+                month   = detail.month,
+                year    = detail.year,
+                onBack  = { navController.popBackStack() }
+            )
+        }
+
         // Scrapbook viewer — a group's collaborative timeline of memory time points
         composable<ScrapbookViewer> { entry ->
             val detail = entry.toRoute<ScrapbookViewer>()
@@ -141,9 +154,9 @@ fun MemoryCircleNavigation() {
             MemoriesScreen(
                 currentRoute    = currentRoute,
                 onNavigate      = onTabSelected,
-                onOpenScrapbook = { groupId ->
-                    // Tap an existing scrapbook → view its timeline (read-only tab)
-                    navController.navigate(ScrapbookViewer(groupId))
+                onOpenScrapbook = { groupId, month, year ->
+                    // Memories shows PAST scrapbooks → open the read-only history view.
+                    navController.navigate(ScrapbookHistory(groupId, month, year))
                 }
             )
         }
@@ -176,10 +189,9 @@ fun MemoryCircleNavigation() {
                 onOpenAllMembers    = { navController.navigate(GroupMembers(detail.groupId)) },
                 onOpenMemberProfile = { /* TODO: navigate to UserProfile once the screen exists */ },
                 onInviteMember      = { /* TODO: navigate to InviteMember once the screen exists */ },
-                onOpenScrapbook     = { gid ->
-                    // For now every month routes back to the live group timeline.
-                    // When ScrapbookHistory lands this will switch to a month-aware route.
-                    navController.navigate(ScrapbookViewer(gid))
+                onOpenScrapbook     = { gid, month, year ->
+                    // GroupDetail's per-month list shows PAST scrapbooks → read-only view.
+                    navController.navigate(ScrapbookHistory(gid, month, year))
                 }
             )
         }

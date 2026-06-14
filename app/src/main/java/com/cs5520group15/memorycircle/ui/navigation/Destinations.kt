@@ -16,8 +16,17 @@ import kotlinx.serialization.Serializable
 @Serializable object Friends
 @Serializable object Profile
 
-// Opens a group's collaborative timeline of memory time points
+// Opens a group's collaborative timeline of memory time points (editable / live).
 @Serializable data class ScrapbookViewer(val groupId: String)
+
+// Opens a read-only view of a past month's scrapbook for one group — no Add photo,
+// no comment posting, no FAB, no menu. Reached from the Memories calendar and from
+// the per-month list on GroupDetail.
+@Serializable data class ScrapbookHistory(
+    val groupId: String,
+    val month:   String,  // e.g. "March"
+    val year:    String   // e.g. "2025"
+)
 
 // data class = a route that carries arguments
 // entryId == null  → create a brand-new time point

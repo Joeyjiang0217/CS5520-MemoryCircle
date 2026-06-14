@@ -33,7 +33,7 @@ import com.cs5520group15.memorycircle.ui.theme.*
 fun MemoriesScreen(
     currentRoute:    String,
     onNavigate:      (Any) -> Unit,
-    onOpenScrapbook: (String) -> Unit,
+    onOpenScrapbook: (groupId: String, month: String, year: String) -> Unit,
     viewModel:       MemoriesViewModel = viewModel()
 ) {
     val months by viewModel.months.collectAsStateWithLifecycle()
@@ -70,7 +70,9 @@ fun MemoriesScreen(
             items(months, key = { it.month + it.year }) { section ->
                 MonthSection(
                     section         = section,
-                    onOpenScrapbook = onOpenScrapbook
+                    onOpenScrapbook = { scrapbook ->
+                        onOpenScrapbook(scrapbook.groupId, section.month, section.year)
+                    }
                 )
             }
         }
@@ -85,7 +87,7 @@ fun MemoriesScreen(
 @Composable
 private fun MonthSection(
     section:         MemoriesViewModel.MonthSection,
-    onOpenScrapbook: (String) -> Unit
+    onOpenScrapbook: (MemoriesViewModel.Scrapbook) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
@@ -123,7 +125,7 @@ private fun MonthSection(
         section.scrapbooks.forEach { scrapbook ->
             ScrapbookCard(
                 scrapbook = scrapbook,
-                onClick   = { onOpenScrapbook(scrapbook.groupId) }
+                onClick   = { onOpenScrapbook(scrapbook) }
             )
         }
     }
@@ -187,7 +189,7 @@ fun MemoriesScreenPreview() {
         MemoriesScreen(
             currentRoute    = "memories",
             onNavigate      = {},
-            onOpenScrapbook = {}
+            onOpenScrapbook = { _, _, _ -> }
         )
     }
 }
