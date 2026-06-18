@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.model.Member
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.ConfirmDialog
@@ -64,8 +65,12 @@ fun GroupDetailScreen(
     val groupName by viewModel.groupName.collectAsStateWithLifecycle()
     val members   by viewModel.members.collectAsStateWithLifecycle()
     val months    by viewModel.months.collectAsStateWithLifecycle()
+    val isOwner   by viewModel.isOwner.collectAsStateWithLifecycle()
+    val currentUid = remember { AuthRepository.currentUid }
 
-    var showLeaveDialog by remember { mutableStateOf(false) }
+    var showLeaveDialog       by remember { mutableStateOf(false) }
+    var showDeleteGroupDialog by remember { mutableStateOf(false) }
+    var memberToKick          by remember { mutableStateOf<Member?>(null) }
 
     Scaffold(
         containerColor = Cream,
@@ -100,9 +105,12 @@ fun GroupDetailScreen(
             item {
                 MembersCard(
                     members             = members,
+                    isOwner             = isOwner,
+                    currentUid          = currentUid,
                     onMemberClick       = onOpenMemberProfile,
                     onSeeAllClick       = onOpenAllMembers,
-                    onInviteClick       = onInviteMember
+                    onInviteClick       = onInviteMember,
+                    onKickMember        = { member -> memberToKick = member }
                 )
             }
 
@@ -112,6 +120,19 @@ fun GroupDetailScreen(
                     iconRes = R.drawable.ic_leave,
                     onClick = { showLeaveDialog = true }
                 )
+            }
+
+            // Owner-only: delete the entire group. Shown as a second
+            // destructive button below Leave so the order escalates in
+            // severity (leave < delete).
+            if (isOwner) {
+                item {
+                    DestructiveOutlinedButton(
+                        label   = "Delete group",
+                        iconRes = R.drawable.ic_leave,
+                        onClick = { showDeleteGroupDialog = true }
+                    )
+                }
             }
 
             item {
@@ -148,6 +169,36 @@ fun GroupDetailScreen(
             onDismiss    = { showLeaveDialog = false }
         )
     }
+
+    // Owner-only: delete the whole group (subcollections become orphans).
+    if (showDeleteGroupDialog) {
+        ConfirmDialog(
+            title        = "Delete group?",
+            message      = "${groupName.ifBlank { "This group" }} and its memories will be removed for every member. This can't be undone.",
+            confirmLabel = "Delete forever",
+            confirmColor = DeleteRed,
+            onConfirm    = {
+                showDeleteGroupDialog = false
+                viewModel.deleteGroup(onDone = onLeftGroup)
+            },
+            onDismiss    = { showDeleteGroupDialog = false }
+        )
+    }
+
+    // Owner-only: confirm kicking a specific member.
+    memberToKick?.let { member ->
+        ConfirmDialog(
+            title        = "Remove ${member.name}?",
+            message      = "${member.name} will lose access to this group's memories.",
+            confirmLabel = "Remove",
+            confirmColor = DeleteRed,
+            onConfirm    = {
+                viewModel.kickMember(member.id)
+                memberToKick = null
+            },
+            onDismiss    = { memberToKick = null }
+        )
+    }
 }
 
 @Composable
@@ -170,9 +221,12 @@ private fun GroupNameHero(groupName: String, memberCount: Int) {
 @Composable
 private fun MembersCard(
     members:       List<Member>,
+    isOwner:       Boolean,
+    currentUid:    String?,
     onMemberClick: (String) -> Unit,
     onSeeAllClick: () -> Unit,
-    onInviteClick: () -> Unit
+    onInviteClick: () -> Unit,
+    onKickMember:  (Member) -> Unit
 ) {
     Card(
         modifier  = Modifier.fillMaxWidth(),
@@ -202,8 +256,11 @@ private fun MembersCard(
 
             ThumbnailGrid(
                 members       = members,
+                isOwner       = isOwner,
+                currentUid    = currentUid,
                 onMemberClick = onMemberClick,
-                onInviteClick = onInviteClick
+                onInviteClick = onInviteClick,
+                onKickMember  = onKickMember
             )
         }
     }
@@ -212,8 +269,11 @@ private fun MembersCard(
 @Composable
 private fun ThumbnailGrid(
     members:       List<Member>,
+    isOwner:       Boolean,
+    currentUid:    String?,
     onMemberClick: (String) -> Unit,
-    onInviteClick: () -> Unit
+    onInviteClick: () -> Unit,
+    onKickMember:  (Member) -> Unit
 ) {
     val columns = 5
     val slots: List<Member?> = members + listOf<Member?>(null)
@@ -225,9 +285,14 @@ private fun ThumbnailGrid(
                 row.forEach { slot ->
                     Box(modifier = Modifier.weight(1f)) {
                         if (slot != null) {
+                            // Owner sees a kick × overlay on every member
+                            // that isn't themselves.
+                            val showKick = isOwner && slot.id != currentUid
                             MemberThumbnail(
-                                member  = slot,
-                                onClick = { onMemberClick(slot.id) }
+                                member       = slot,
+                                onClick      = { onMemberClick(slot.id) },
+                                showKick     = showKick,
+                                onKickClick  = { onKickMember(slot) }
                             )
                         } else {
                             InviteThumbnail(onClick = onInviteClick)
@@ -244,8 +309,10 @@ private fun ThumbnailGrid(
 
 @Composable
 private fun MemberThumbnail(
-    member:  Member,
-    onClick: () -> Unit
+    member:      Member,
+    onClick:     () -> Unit,
+    showKick:    Boolean = false,
+    onKickClick: () -> Unit = {}
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -265,6 +332,26 @@ private fun MemberThumbnail(
                         .clip(CircleShape)
                         .background(AccentGreen)
                 )
+            }
+            // Owner-only: small × badge in the corner. Tapping it triggers
+            // a kick-confirm dialog upstream. Sits over the avatar's top-end
+            // so it doesn't crowd the online dot at the bottom-end.
+            if (showKick) {
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .align(Alignment.TopEnd)
+                        .clip(CircleShape)
+                        .background(DeleteRed)
+                        .clickable { onKickClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text  = "×",
+                        color = WhiteCard,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(6.dp))

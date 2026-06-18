@@ -51,10 +51,14 @@ class GroupDetailViewModel : ViewModel() {
     private val _groupName = MutableStateFlow("")
     private val _members   = MutableStateFlow<List<Member>>(emptyList())
     private val _months    = MutableStateFlow<List<MonthScrapbook>>(emptyList())
+    private val _isOwner   = MutableStateFlow(false)
 
     val groupName: StateFlow<String>              = _groupName.asStateFlow()
     val members:   StateFlow<List<Member>>        = _members.asStateFlow()
     val months:    StateFlow<List<MonthScrapbook>> = _months.asStateFlow()
+    /** True when the current logged-in user is the group's owner. Used by the
+     *  screen to show owner-only affordances (kick member, delete group). */
+    val isOwner:   StateFlow<Boolean>             = _isOwner.asStateFlow()
 
     private var boundGroupId: String? = null
 
@@ -72,12 +76,15 @@ class GroupDetailViewModel : ViewModel() {
         val groupRef  = db.collection("groups").document(groupId)
         val colorType = "brown"   // fallback color for scrapbook rows
 
-        // 1) Group main doc — pull `name` AND derive members from memberIds.
-        //    Adding/removing a member updates the group doc, so this listener
-        //    fires and re-runs the name lookup. No separate members listener.
+        // 1) Group main doc — pull `name`, derive members from memberIds, and
+        //    flag whether the current user is the owner so the screen can
+        //    surface owner-only affordances.
         groupListener = groupRef.addSnapshotListener { snap, err ->
             if (err != null || snap == null) return@addSnapshotListener
             _groupName.value = snap.getString("name") ?: "Untitled"
+
+            val ownerId = snap.getString("ownerId")
+            _isOwner.value = ownerId != null && ownerId == AuthRepository.currentUid
 
             @Suppress("UNCHECKED_CAST")
             val uids = (snap.get("memberIds") as? List<String>) ?: emptyList()
@@ -115,13 +122,41 @@ class GroupDetailViewModel : ViewModel() {
 
     /**
      * Removes the current user from the bound group in Firestore, then calls
-     * `onDone` so the screen can navigate back.
+     * `onDone` so the screen can navigate back. GroupRepository.leaveGroup
+     * handles the owner-transfer / delete-if-last-member logic internally.
      */
     fun leaveGroup(onDone: () -> Unit) {
         val groupId = boundGroupId ?: return
         val uid = AuthRepository.currentUid ?: return
         viewModelScope.launch {
             runCatching { GroupRepository.leaveGroup(groupId, uid) }
+                .onSuccess { onDone() }
+        }
+    }
+
+    /**
+     * Owner-only: remove a specific member from the group. UI gates this
+     * behind isOwner; the repository call still runs without a guard so a
+     * misuse would surface as a Firestore rule error (when rules land).
+     */
+    fun kickMember(memberUid: String) {
+        val groupId = boundGroupId ?: return
+        if (!_isOwner.value) return
+        viewModelScope.launch {
+            runCatching { GroupRepository.kickMember(groupId, memberUid) }
+        }
+    }
+
+    /**
+     * Owner-only: delete the entire group. Same caveat as kickMember re: rules.
+     * Subcollections (scrapbooks) and Storage photos are not cascaded — a
+     * Cloud Function would handle that in production.
+     */
+    fun deleteGroup(onDone: () -> Unit) {
+        val groupId = boundGroupId ?: return
+        if (!_isOwner.value) return
+        viewModelScope.launch {
+            runCatching { GroupRepository.deleteGroup(groupId) }
                 .onSuccess { onDone() }
         }
     }
