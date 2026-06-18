@@ -109,16 +109,31 @@ fun CreateGroupScreen(
     val title    = if (isInviteMode) "Invite New Members" else "New Group"
     val ctaLabel = if (isInviteMode) "Invite Now"         else "Create Now"
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // One-shot events from the ViewModel: Created(groupId) → caller's onCreated;
+    // ShowSnackbar → snackbar host. Collected via LaunchedEffect so cancellation
+    // is tied to the screen leaving composition.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is CreateGroupViewModel.CreateGroupEvent.Created      -> onCreated(event.groupId)
+                is CreateGroupViewModel.CreateGroupEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
+
     val onConfirm: () -> Unit = {
         if (isInviteMode) {
             onInvite(selectedIds.toList())
         } else {
-            viewModel.createGroup()?.let(onCreated)
+            viewModel.onCreateClick()
         }
     }
 
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         topBar = {
             MemoryCircleTopBar(
                 title    = title,
