@@ -2,6 +2,8 @@ package com.cs5520group15.memorycircle.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cs5520group15.memorycircle.data.AuthRepository
+import com.cs5520group15.memorycircle.data.Result
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,8 +40,8 @@ class LoginViewModel : ViewModel() {
     fun onPasswordChange(value: String) { _password.value = value }
 
     /**
-     * What: Validates login input and triggers navigation to Home on success.
-     *       Shows a Snackbar if validation fails.
+     * What: Validates login input and signs in via Firebase. Navigates Home on
+     *       success or pops a Snackbar on failure / missing fields.
      * Who: Called by LoginScreen on Sign In tap.
      * When: On Sign In button click.
      */
@@ -48,10 +50,41 @@ class LoginViewModel : ViewModel() {
             _events.send(LoginEvent.ShowSnackbar("Please fill in all fields"))
             return@launch
         }
-        // Simulated login — Firebase will replace this later.
         _isLoading.value = true
-        kotlinx.coroutines.delay(500)
-        _isLoading.value = false
-        _events.send(LoginEvent.NavigateToHome)
+        when (val result = AuthRepository.login(_email.value.trim(), _password.value)) {
+            is Result.Success -> {
+                _isLoading.value = false
+                _events.send(LoginEvent.NavigateToHome)
+            }
+            is Result.Error -> {
+                _isLoading.value = false
+                _events.send(LoginEvent.ShowSnackbar(result.message))
+            }
+            is Result.Loading -> { /* repository returns terminal states */ }
+        }
+    }
+
+    /**
+     * What: Sends a Firebase password-reset email. Confirms via Snackbar.
+     * Who: Called by LoginScreen's Forgot-password dialog.
+     * When: On "Send reset link" tap.
+     */
+    fun onForgotPassword(email: String) = viewModelScope.launch {
+        if (email.isBlank()) {
+            _events.send(LoginEvent.ShowSnackbar("Please enter your email"))
+            return@launch
+        }
+        _isLoading.value = true
+        when (val result = AuthRepository.sendPasswordReset(email.trim())) {
+            is Result.Success -> {
+                _isLoading.value = false
+                _events.send(LoginEvent.ShowSnackbar("Password reset link sent to $email"))
+            }
+            is Result.Error -> {
+                _isLoading.value = false
+                _events.send(LoginEvent.ShowSnackbar(result.message))
+            }
+            is Result.Loading -> { }
+        }
     }
 }

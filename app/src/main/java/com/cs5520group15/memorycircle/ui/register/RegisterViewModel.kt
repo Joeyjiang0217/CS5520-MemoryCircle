@@ -2,6 +2,8 @@ package com.cs5520group15.memorycircle.ui.register
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cs5520group15.memorycircle.data.AuthRepository
+import com.cs5520group15.memorycircle.data.Result
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,8 +43,8 @@ class RegisterViewModel : ViewModel() {
     fun onPasswordChange(value: String) { _password.value = value }
 
     /**
-     * What: Validates register input and triggers navigation to Home on success.
-     *       Shows a Snackbar if validation fails.
+     * What: Validates register input and creates a Firebase Auth account + a
+     *       matching users/{uid} Firestore document. Navigates Home on success.
      * Who: Called by RegisterScreen on Create Account tap.
      * When: On Create Account button click.
      */
@@ -52,8 +54,20 @@ class RegisterViewModel : ViewModel() {
             return@launch
         }
         _isLoading.value = true
-        kotlinx.coroutines.delay(500)
-        _isLoading.value = false
-        _events.send(RegisterEvent.NavigateToHome)
+        when (val result = AuthRepository.register(
+            _name.value.trim(),
+            _email.value.trim(),
+            _password.value
+        )) {
+            is Result.Success -> {
+                _isLoading.value = false
+                _events.send(RegisterEvent.NavigateToHome)
+            }
+            is Result.Error -> {
+                _isLoading.value = false
+                _events.send(RegisterEvent.ShowSnackbar(result.message))
+            }
+            is Result.Loading -> { }
+        }
     }
 }
