@@ -14,22 +14,18 @@ object GroupRepository {
     private val db = FirebaseModule.db
 
     /**
-     * Removes the current user from a group atomically:
+     * Removes the current user from a group:
      *   - arrayRemove uid from groups/{groupId}.memberIds
      *   - decrement groups/{groupId}.memberCount by 1
-     *   - delete groups/{groupId}/members/{uid}
      *
-     * The three writes are bundled in a single batch so a group never ends up
-     * with a stale memberIds entry or an orphan members subdoc on failure.
+     * The two field updates land in a single update call so memberIds and
+     * memberCount can never drift out of sync. There is no separate members
+     * subcollection — `memberIds` IS the source of truth for membership.
      */
     suspend fun leaveGroup(groupId: String, uid: String) {
-        val groupRef = db.collection("groups").document(groupId)
-        db.runBatch { batch ->
-            batch.update(groupRef, mapOf(
-                "memberIds"   to FieldValue.arrayRemove(uid),
-                "memberCount" to FieldValue.increment(-1)
-            ))
-            batch.delete(groupRef.collection("members").document(uid))
-        }.await()
+        db.collection("groups").document(groupId).update(mapOf(
+            "memberIds"   to FieldValue.arrayRemove(uid),
+            "memberCount" to FieldValue.increment(-1)
+        )).await()
     }
 }

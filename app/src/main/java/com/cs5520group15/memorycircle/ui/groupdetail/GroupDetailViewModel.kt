@@ -20,10 +20,16 @@ import java.util.Locale
  * What: Holds the state shown on the group detail page — the group name, the
  *       flat member list (used both as thumbnails and as the "view all" roster),
  *       and the list of per-month scrapbook entries that belong to this group.
- *       All three are now live Firestore subscriptions:
- *         - groupName: groups/{gid}.name
- *         - members:   groups/{gid}/members subcollection
- *         - months:    groups/{gid}/scrapbooks subcollection
+ *
+ *       Two live Firestore subscriptions:
+ *         - groups/{gid}        → name + memberIds (members list is derived
+ *                                 from the array; the uids are batch-resolved
+ *                                 to display names via AuthRepository).
+ *         - groups/{gid}/scrapbooks → per-month timeline list.
+ *
+ *       There is no separate members subcollection — `memberIds` IS the
+ *       membership source of truth and member display names are looked up at
+ *       read time, same convention as posts/comments.
  * Who: Used by GroupDetailScreen.
  * When: Created when the screen is shown for a specific groupId; survives
  *       config changes. Listeners detached in onCleared().
@@ -53,15 +59,10 @@ class GroupDetailViewModel : ViewModel() {
     private var boundGroupId: String? = null
 
     private var groupListener:      ListenerRegistration? = null
-    private var membersListener:    ListenerRegistration? = null
     private var scrapbooksListener: ListenerRegistration? = null
 
     private val monthFormatter = DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)
 
-    /**
-     * Subscribes to all three Firestore sources for `groupId`. Safe to call
-     * multiple times — re-binds cleanly by detaching the old listeners first.
-     */
     fun bind(groupId: String) {
         if (boundGroupId == groupId) return
         boundGroupId = groupId
@@ -71,36 +72,29 @@ class GroupDetailViewModel : ViewModel() {
         val groupRef  = db.collection("groups").document(groupId)
         val colorType = "brown"   // fallback color for scrapbook rows
 
-        // 1) Group main doc — pull `name` (fallback to "Untitled" if missing).
+        // 1) Group main doc — pull `name` AND derive members from memberIds.
+        //    Adding/removing a member updates the group doc, so this listener
+        //    fires and re-runs the name lookup. No separate members listener.
         groupListener = groupRef.addSnapshotListener { snap, err ->
             if (err != null || snap == null) return@addSnapshotListener
             _groupName.value = snap.getString("name") ?: "Untitled"
-        }
 
-        // 2) Members subcollection — ordered by joinedAt so the owner shows first.
-        //    Member subdocs only store the uid; display names are resolved via
-        //    AuthRepository.getUserNames(...) (batched + cached), matching the
-        //    post/comment convention.
-        membersListener = groupRef.collection("members")
-            .orderBy("joinedAt", Query.Direction.ASCENDING)
-            .addSnapshotListener { snap, err ->
-                if (err != null || snap == null) return@addSnapshotListener
-                val uids = snap.documents.map { it.getString("uid") ?: it.id }
-                viewModelScope.launch {
-                    val nameMap = AuthRepository.getUserNames(uids)
-                    _members.value = uids.map { uid ->
-                        Member(
-                            id             = uid,
-                            name           = nameMap[uid] ?: "Member",
-                            sharedMemories = 0,
-                            isOnline       = false
-                        )
-                    }
+            @Suppress("UNCHECKED_CAST")
+            val uids = (snap.get("memberIds") as? List<String>) ?: emptyList()
+            viewModelScope.launch {
+                val nameMap = AuthRepository.getUserNames(uids)
+                _members.value = uids.map { uid ->
+                    Member(
+                        id             = uid,
+                        name           = nameMap[uid] ?: "Member",
+                        sharedMemories = 0,
+                        isOnline       = false
+                    )
                 }
             }
+        }
 
-        // 3) Scrapbooks subcollection — newest month first (doc id is "YYYY-MM"
-        //    so descending document-name sort = newest first).
+        // 2) Scrapbooks subcollection — newest month first (doc id "YYYY-MM").
         scrapbooksListener = groupRef.collection("scrapbooks")
             .orderBy(com.google.firebase.firestore.FieldPath.documentId(), Query.Direction.DESCENDING)
             .addSnapshotListener { snap, err ->
@@ -134,7 +128,6 @@ class GroupDetailViewModel : ViewModel() {
 
     private fun detachAll() {
         groupListener?.remove();      groupListener = null
-        membersListener?.remove();    membersListener = null
         scrapbooksListener?.remove(); scrapbooksListener = null
     }
 

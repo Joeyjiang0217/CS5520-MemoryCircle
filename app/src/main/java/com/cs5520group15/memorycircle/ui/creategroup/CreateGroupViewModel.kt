@@ -117,7 +117,12 @@ class CreateGroupViewModel : ViewModel() {
             val pickedIds    = _selectedIds.value.toList()
             val allMemberIds = (listOf(uid) + pickedIds).distinct()
 
-            // 1) Group document
+            // 1) Group document. memberIds IS the membership list — no
+            //    separate members subcollection is created, since `memberIds`
+            //    already carries every uid we'd put in a subdoc and member
+            //    display names are looked up at render time via
+            //    AuthRepository.getUserNames(...). Owner is identified by the
+            //    `ownerId` field rather than a per-doc `role` field.
             groupRef.set(mapOf(
                 "groupId"     to groupId,
                 "name"        to name,
@@ -128,26 +133,7 @@ class CreateGroupViewModel : ViewModel() {
                 "memoryCount" to 0
             )).await()
 
-            // 2) Owner member subdoc — only the uid is persisted; the display
-            // name is resolved at read time via AuthRepository.getUserNames(...),
-            // same convention as posts/comments. No fan-out needed on rename.
-            groupRef.collection("members").document(uid).set(mapOf(
-                "uid"      to uid,
-                "role"     to "owner",
-                "joinedAt" to FieldValue.serverTimestamp()
-            )).await()
-
-            // 3) Member subdoc per picked friend (id only, name looked up at read time)
-            val pickedIdsSet = _selectedIds.value
-            pickedIdsSet.forEach { friendId ->
-                groupRef.collection("members").document(friendId).set(mapOf(
-                    "uid"      to friendId,
-                    "role"     to "member",
-                    "joinedAt" to FieldValue.serverTimestamp()
-                )).await()
-            }
-
-            // 4) Initial scrapbook for the current month
+            // 2) Initial scrapbook for the current month
             val scrapbookId = YearMonth.now().toString()
             groupRef.collection("scrapbooks").document(scrapbookId).set(mapOf(
                 "scrapbookId" to scrapbookId,
