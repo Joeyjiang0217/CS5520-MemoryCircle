@@ -1,79 +1,146 @@
 package com.cs5520group15.memorycircle.ui.memories
 
 import androidx.lifecycle.ViewModel
+import com.cs5520group15.memorycircle.data.AuthRepository
+import com.cs5520group15.memorycircle.data.FirebaseModule
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * What: Holds the UI state for the Memories (calendar) screen.
- *       Scrapbooks are generated per month, so the data is grouped by month.
- *       Each month holds the scrapbooks created for that month (one per group).
+ *       Real-time subscriptions on two levels:
+ *         - the user's group list (groups where memberIds array-contains uid)
+ *         - each member group's scrapbooks subcollection
+ *       Two-level listening is required because creating a new group writes
+ *       the group doc first and the seed scrapbook a few RPCs later — a
+ *       one-shot .get() on scrapbooks racing the group-doc listener returns
+ *       empty for the brand-new group.
  * Who: Used by MemoriesScreen.
- * When: Created when MemoriesScreen is first displayed, survives config changes.
+ * When: Created when MemoriesScreen is first displayed; survives config changes.
  */
 class MemoriesViewModel : ViewModel() {
 
-    /**
-     * What: A single generated scrapbook belonging to one group within a month.
-     * Who: Used by MemoriesViewModel and MemoriesScreen.
-     * When: Instantiated when loading the month sections.
-     */
+    /** One scrapbook belonging to a single group within a month. */
     data class Scrapbook(
         val id:          String,
         val groupId:     String,
-        val groupName:   String,  // e.g. "Group 1"
+        val groupName:   String,
         val memoryCount: Int,
-        val colorType:   String   // "brown" or "sage" — controls card accent color
+        val colorType:   String
     )
 
-    /**
-     * What: One month bucket in the calendar, holding all scrapbooks for that month.
-     * Who: Used by MemoriesViewModel and MemoriesScreen.
-     * When: Instantiated when loading dummy data.
-     */
+    /** One month bucket holding every group's scrapbook for that month. */
     data class MonthSection(
-        val month:      String,  // e.g. "January"
-        val year:       String,  // e.g. "2025"
+        val month:      String,
+        val year:       String,
         val scrapbooks: List<Scrapbook>
     )
 
     private val _months = MutableStateFlow<List<MonthSection>>(emptyList())
     val months: StateFlow<List<MonthSection>> = _months.asStateFlow()
 
-    init {
-        loadDummyMonths()
+    private var groupsListener: ListenerRegistration? = null
+
+    /** groupId -> active listener on that group's scrapbooks subcollection. */
+    private val scrapbookListeners = mutableMapOf<String, ListenerRegistration>()
+
+    /** groupId -> (name, colorType) — updated whenever the groups snapshot fires. */
+    private val groupMeta = mutableMapOf<String, Pair<String, String>>()
+
+    /** groupId -> latest scrapbook document snapshots seen by the scrapbook listener. */
+    private val groupScrapbooks = mutableMapOf<String, List<DocumentSnapshot>>()
+
+    private val monthFormatter = DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)
+
+    init { loadMonths() }
+
+    private fun loadMonths() {
+        val uid = AuthRepository.currentUid ?: return
+        groupsListener = FirebaseModule.db.collection("groups")
+            .whereArrayContains("memberIds", uid)
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null) return@addSnapshotListener
+
+                val currentGroupIds = snap.documents.map { it.id }.toSet()
+
+                // Update group metadata.
+                snap.documents.forEach { doc ->
+                    groupMeta[doc.id] = (doc.getString("name") ?: "Untitled") to
+                                        (doc.getString("colorType") ?: "brown")
+                }
+
+                // Attach scrapbook listeners for any new groups.
+                currentGroupIds.forEach { groupId ->
+                    if (groupId !in scrapbookListeners) {
+                        scrapbookListeners[groupId] = FirebaseModule.db
+                            .collection("groups").document(groupId)
+                            .collection("scrapbooks")
+                            .addSnapshotListener { sbSnap, sbErr ->
+                                if (sbErr != null || sbSnap == null) return@addSnapshotListener
+                                groupScrapbooks[groupId] = sbSnap.documents
+                                rebuild()
+                            }
+                    }
+                }
+
+                // Detach listeners for groups the user is no longer in
+                // (e.g. after leaveGroup).
+                val toRemove = scrapbookListeners.keys - currentGroupIds
+                toRemove.forEach { groupId ->
+                    scrapbookListeners.remove(groupId)?.remove()
+                    groupScrapbooks.remove(groupId)
+                    groupMeta.remove(groupId)
+                }
+
+                rebuild()   // rebuild even if no scrapbooks changed (group name/color may have)
+            }
     }
 
-    /**
-     * What: Loads a hardcoded calendar of months with their scrapbooks.
-     *       Firebase will replace this in a later phase.
-     * Who: Called automatically in the init block.
-     * When: Once when the ViewModel is first created.
-     */
-    private fun loadDummyMonths() {
-        _months.value = listOf(
-            MonthSection(
-                month = "March", year = "2025",
-                scrapbooks = listOf(
-                    Scrapbook("s3a", "1", "Group 1", 9, "brown"),
-                    Scrapbook("s3b", "2", "Group 2", 4, "sage")
+    private fun rebuild() {
+        val byMonth = mutableMapOf<String, MutableList<Scrapbook>>()
+
+        groupScrapbooks.forEach { (groupId, sbDocs) ->
+            val (groupName, colorType) = groupMeta[groupId] ?: return@forEach
+            sbDocs.forEach { sb ->
+                val key = sb.id   // "YYYY-MM"
+                runCatching { YearMonth.parse(key) }.getOrNull() ?: return@forEach
+                byMonth.getOrPut(key) { mutableListOf() }.add(
+                    Scrapbook(
+                        id          = "${groupId}_$key",
+                        groupId     = groupId,
+                        groupName   = groupName,
+                        memoryCount = (sb.getLong("postCount") ?: 0L).toInt(),
+                        colorType   = colorType
+                    )
                 )
-            ),
-            MonthSection(
-                month = "February", year = "2025",
-                scrapbooks = listOf(
-                    Scrapbook("s2a", "1", "Group 1", 7, "brown")
+            }
+        }
+
+        _months.value = byMonth.entries
+            .sortedByDescending { it.key }
+            .map { (key, list) ->
+                val ym = YearMonth.parse(key)
+                MonthSection(
+                    month      = ym.format(monthFormatter),
+                    year       = ym.year.toString(),
+                    scrapbooks = list.sortedBy { it.groupName }
                 )
-            ),
-            MonthSection(
-                month = "January", year = "2025",
-                scrapbooks = listOf(
-                    Scrapbook("s1a", "1", "Group 1", 12, "brown"),
-                    Scrapbook("s1b", "2", "Group 2", 5,  "sage"),
-                    Scrapbook("s1c", "3", "Group 3", 8,  "brown")
-                )
-            )
-        )
+            }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        groupsListener?.remove()
+        groupsListener = null
+        scrapbookListeners.values.forEach { it.remove() }
+        scrapbookListeners.clear()
+        groupScrapbooks.clear()
+        groupMeta.clear()
     }
 }

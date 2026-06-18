@@ -53,6 +53,10 @@ fun GroupDetailScreen(
     onOpenMemberProfile:  (String) -> Unit,
     onInviteMember:       () -> Unit,
     onOpenScrapbook:      (groupId: String, month: String, year: String) -> Unit,
+    /** Invoked after the user successfully leaves the group. The nav layer
+     *  should navigate to Home and pop the back stack so the user does NOT
+     *  fall back into the ScrapbookViewer of the group they just left. */
+    onLeftGroup:          () -> Unit = onBack,
     viewModel:            GroupDetailViewModel = viewModel()
 ) {
     LaunchedEffect(groupId) { viewModel.bind(groupId) }
@@ -139,7 +143,7 @@ fun GroupDetailScreen(
             confirmColor = Brown,
             onConfirm    = {
                 showLeaveDialog = false
-                viewModel.leaveGroup(onDone = onBack)
+                viewModel.leaveGroup(onDone = onLeftGroup)
             },
             onDismiss    = { showLeaveDialog = false }
         )

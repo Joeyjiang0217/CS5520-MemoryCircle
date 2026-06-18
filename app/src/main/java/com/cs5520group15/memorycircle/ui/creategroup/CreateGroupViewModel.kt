@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.data.FirebaseModule
 import com.cs5520group15.memorycircle.data.FriendsRepository
-import com.cs5520group15.memorycircle.data.Result
 import com.cs5520group15.memorycircle.model.Friend
 import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.channels.Channel
@@ -129,24 +128,20 @@ class CreateGroupViewModel : ViewModel() {
                 "memoryCount" to 0
             )).await()
 
-            // 2) Owner member subdoc
-            val ownerName = when (val r = AuthRepository.getCurrentUserName()) {
-                is Result.Success -> r.data
-                else              -> "User"
-            }
+            // 2) Owner member subdoc — only the uid is persisted; the display
+            // name is resolved at read time via AuthRepository.getUserNames(...),
+            // same convention as posts/comments. No fan-out needed on rename.
             groupRef.collection("members").document(uid).set(mapOf(
                 "uid"      to uid,
-                "name"     to ownerName,
                 "role"     to "owner",
                 "joinedAt" to FieldValue.serverTimestamp()
             )).await()
 
-            // 3) Member subdoc per picked friend (name from the picker's contact list)
-            val pickedFriends = contacts.value.filter { it.id in _selectedIds.value }
-            pickedFriends.forEach { friend ->
-                groupRef.collection("members").document(friend.id).set(mapOf(
-                    "uid"      to friend.id,
-                    "name"     to friend.name,
+            // 3) Member subdoc per picked friend (id only, name looked up at read time)
+            val pickedIdsSet = _selectedIds.value
+            pickedIdsSet.forEach { friendId ->
+                groupRef.collection("members").document(friendId).set(mapOf(
+                    "uid"      to friendId,
                     "role"     to "member",
                     "joinedAt" to FieldValue.serverTimestamp()
                 )).await()

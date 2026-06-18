@@ -78,17 +78,24 @@ class GroupDetailViewModel : ViewModel() {
         }
 
         // 2) Members subcollection — ordered by joinedAt so the owner shows first.
+        //    Member subdocs only store the uid; display names are resolved via
+        //    AuthRepository.getUserNames(...) (batched + cached), matching the
+        //    post/comment convention.
         membersListener = groupRef.collection("members")
             .orderBy("joinedAt", Query.Direction.ASCENDING)
             .addSnapshotListener { snap, err ->
                 if (err != null || snap == null) return@addSnapshotListener
-                _members.value = snap.documents.map { doc ->
-                    Member(
-                        id             = doc.getString("uid") ?: doc.id,
-                        name           = doc.getString("name") ?: "Member",
-                        sharedMemories = 0,
-                        isOnline       = false
-                    )
+                val uids = snap.documents.map { it.getString("uid") ?: it.id }
+                viewModelScope.launch {
+                    val nameMap = AuthRepository.getUserNames(uids)
+                    _members.value = uids.map { uid ->
+                        Member(
+                            id             = uid,
+                            name           = nameMap[uid] ?: "Member",
+                            sharedMemories = 0,
+                            isOnline       = false
+                        )
+                    }
                 }
             }
 

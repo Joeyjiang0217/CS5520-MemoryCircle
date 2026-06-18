@@ -301,6 +301,15 @@ fun MemoryCircleNavigation() {
                 onInviteMember      = { navController.navigate(CreateGroup(isInviteMode = true)) },
                 onOpenScrapbook     = { gid, month, year ->
                     navController.navigate(ScrapbookHistory(gid, month, year))
+                },
+                onLeftGroup         = {
+                    // After leaving a group, popBackStack would land on this
+                    // group's ScrapbookViewer — exactly what we just left.
+                    // Navigate to Home and clear everything above it instead.
+                    navController.navigate(Home) {
+                        popUpTo(Home) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
             )
         }
