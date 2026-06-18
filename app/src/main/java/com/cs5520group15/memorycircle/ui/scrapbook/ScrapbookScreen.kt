@@ -56,8 +56,21 @@ fun ScrapbookScreen(
     val description by viewModel.description.collectAsStateWithLifecycle()
     val tags        by viewModel.tags.collectAsStateWithLifecycle()
     val photoUri    by viewModel.selectedPhotoUri.collectAsStateWithLifecycle()
+    val isSaving    by viewModel.isSaving.collectAsStateWithLifecycle()
 
     val isJoinMode = viewModel.isJoinMode
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Wait for the actual save to complete (photo upload + Firestore write) before
+    // navigating back, instead of fire-and-forget. Errors surface via Snackbar.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is ScrapbookViewModel.SaveEvent.Success -> onSaved()
+                is ScrapbookViewModel.SaveEvent.Error   -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
     val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM d", Locale.ENGLISH)) }
 
     var newTagInput by remember { mutableStateOf("") }
@@ -71,6 +84,7 @@ fun ScrapbookScreen(
 
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         topBar = {
             MemoryCircleTopBar(
                 title    = if (isJoinMode) "Add Your Photo" else "New Memory",
@@ -241,11 +255,9 @@ fun ScrapbookScreen(
 
             PrimaryButton(
                 label   = if (isJoinMode) "✦  Add to Timeline" else "✦  Create Memory",
-                onClick = {
-                    viewModel.save(groupId, today)
-                    onSaved()
-                },
-                enabled = viewModel.canSave
+                onClick = { viewModel.save(groupId, today) },
+                enabled = viewModel.canSave && !isSaving,
+                loading = isSaving
             )
 
             Spacer(modifier = Modifier.height(16.dp))

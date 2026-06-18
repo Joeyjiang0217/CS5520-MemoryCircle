@@ -1,44 +1,58 @@
 package com.cs5520group15.memorycircle.model
 
 /**
- * What: One group member's contribution to a memory time point — their own photo
- *       and their own one-line description. Because every member sees the day
- *       differently, a single time point holds many of these (one per person who
- *       joined it).
+ * What: A single photo within a scrapbook post. Multiple photos per post are
+ *       supported — the post's original author lays down the first one, and
+ *       teammates can later "join" the post to append theirs.
  * Who: Used by ScrapbookEntry, ScrapbookRepository, and the scrapbook screens.
- * When: Created when a member adds their photo + words to a time point.
+ * When: Created when a member uploads a photo to a new or existing post.
+ *
+ * Firestore note: only `uploaderId` is persisted — the uploader's display name
+ * is looked up at render time so renaming users doesn't leave stale strings
+ * inside post photo arrays.
  */
-data class MemberContribution(
-    val memberName:  String,   // drives avatar initial + label
-    val photoUri:    String,   // content:// (album pick) or remote URL (mock)
-    val description: String    // this member's own line about the day
+data class Photo(
+    val photoId:     String,
+    val url:         String,    // Firebase Storage download URL
+    val storagePath: String,    // for future deletion
+    val description: String,
+    val uploaderId:  String
 )
 
 /**
- * What: A single memory "time point" in a group's timeline. The first member to
- *       create it sets the `title` and `tags`; everyone else joins by appending a
- *       `MemberContribution`. Each scrapbook covers ONE month, so `date` is the
- *       day within that month.
- * Who: Used by ScrapbookMockData, ScrapbookRepository, and the scrapbook screens.
- * When: Instantiated when loading or creating a timeline entry.
+ * What: A single memory "time point" in a group's monthly scrapbook. One author
+ *       creates it (sets title + tags + first photo + day); teammates can join
+ *       it later by appending their own photos. Each scrapbook covers ONE
+ *       month, so `date` is the day within that month, e.g. "June 1".
+ *
+ *       Storage layout: posts/{postId} stores only `authorId` — the
+ *       `authorName` field below is populated by ScrapbookRepository at read
+ *       time from a cached user lookup. Same for comment authors.
+ * Who: Used by ScrapbookRepository and all scrapbook screens.
+ * When: Instantiated when loading or rendering a timeline entry.
  */
 data class ScrapbookEntry(
-    val id:            String,
-    val date:          String,                 // day within the month, e.g. "June 1"
-    val title:         String,                 // set by the first creator
-    val tags:          List<String> = emptyList(),
-    val contributions: List<MemberContribution> = emptyList(),
-    val comments:      List<Comment> = emptyList()
+    val id:           String,
+    val authorId:     String,
+    val authorName:   String,                       // derived: filled by repo on read
+    val date:         String,                       // day within the month, e.g. "June 1"
+    val title:        String,
+    val tags:         List<String> = emptyList(),
+    val photos:       List<Photo> = emptyList(),
+    val comments:     List<Comment> = emptyList(),
+    val commentCount: Int = 0
 )
 
 /**
- * What: A short comment a group member leaves on a memory, expressing how they
- *       felt about it (Xiaohongshu-style group comments).
+ * What: A short comment a group member leaves on a memory. Like posts, only
+ *       `authorId` is persisted to Firestore — `authorName` is filled in at
+ *       read time from the user lookup cache.
  * Who: Used by ScrapbookEntry, ScrapbookRepository, and ScrapbookViewerScreen.
  * When: Created when a member posts a comment.
  */
 data class Comment(
-    val id:     String,
-    val author: String,
-    val text:   String
+    val id:         String,
+    val authorId:   String,
+    val authorName: String,    // derived: filled by repo on read
+    val text:       String
 )

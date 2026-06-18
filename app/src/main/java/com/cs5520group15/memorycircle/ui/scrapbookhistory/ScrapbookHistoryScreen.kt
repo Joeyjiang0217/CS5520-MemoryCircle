@@ -20,7 +20,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.cs5520group15.memorycircle.data.ScrapbookRepository
 import com.cs5520group15.memorycircle.model.Comment
-import com.cs5520group15.memorycircle.model.MemberContribution
+import com.cs5520group15.memorycircle.model.Photo
 import com.cs5520group15.memorycircle.model.ScrapbookEntry
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
@@ -138,7 +138,7 @@ private fun HistoryMemoryCard(
         Column(modifier = Modifier.padding(12.dp)) {
 
             Text(
-                text  = "👥 ${entry.contributions.size} members",
+                text  = "📸 ${entry.photos.size} photos",
                 style = MaterialTheme.typography.labelSmall,
                 color = Brown
             )
@@ -163,8 +163,8 @@ private fun HistoryMemoryCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                entry.contributions.forEach { contribution ->
-                    HistoryContributionBlock(contribution)
+                entry.photos.forEach { photo ->
+                    HistoryPhotoBlock(photo = photo, authorName = entry.authorName)
                 }
             }
 
@@ -189,11 +189,11 @@ private fun HistoryMemoryCard(
 }
 
 @Composable
-private fun HistoryContributionBlock(contribution: MemberContribution) {
+private fun HistoryPhotoBlock(photo: Photo, authorName: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AsyncImage(
-            model              = contribution.photoUri,
-            contentDescription = "${contribution.memberName}'s photo",
+            model              = photo.url,
+            contentDescription = "$authorName's photo",
             contentScale       = ContentScale.Crop,
             modifier           = Modifier
                 .fillMaxWidth()
@@ -201,17 +201,17 @@ private fun HistoryContributionBlock(contribution: MemberContribution) {
                 .clip(RoundedCornerShape(8.dp))
         )
         Row(verticalAlignment = Alignment.Top) {
-            AvatarCircle(name = contribution.memberName, size = 28.dp)
+            AvatarCircle(name = authorName, size = 28.dp)
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text  = contribution.memberName,
+                    text  = authorName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Brown
                 )
-                if (contribution.description.isNotBlank()) {
+                if (photo.description.isNotBlank()) {
                     Text(
-                        text  = contribution.description,
+                        text  = photo.description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Ink
                     )
@@ -225,7 +225,7 @@ private fun HistoryContributionBlock(contribution: MemberContribution) {
 private fun HistoryCommentRow(comment: Comment) {
     Row {
         Text(
-            text  = comment.author,
+            text  = comment.authorName,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
             color = Brown
         )

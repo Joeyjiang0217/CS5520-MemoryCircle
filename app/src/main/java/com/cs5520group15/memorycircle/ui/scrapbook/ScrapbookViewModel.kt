@@ -1,18 +1,24 @@
 package com.cs5520group15.memorycircle.ui.scrapbook
 
 import androidx.lifecycle.ViewModel
-import com.cs5520group15.memorycircle.data.CurrentUser
+import androidx.lifecycle.viewModelScope
+import com.cs5520group15.memorycircle.data.FirebaseModule
 import com.cs5520group15.memorycircle.data.ScrapbookRepository
-import com.cs5520group15.memorycircle.model.MemberContribution
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 
 /**
- * What: Holds the UI state for the scrapbook creation screen, which serves two
- *       modes: creating a brand-new time point (sets title + tags + first photo +
- *       description) or joining an existing one (adds only this member's photo +
- *       description; title + tags are inherited and read-only).
+ * What: UI state for the scrapbook creation screen, serving two modes:
+ *       creating a brand-new time point (title + tags + first photo + description)
+ *       or joining an existing one (appends only this member's photo + description).
  * Who: Used by ScrapbookScreen.
  * When: Created when the creation screen is displayed.
  */
@@ -22,17 +28,35 @@ class ScrapbookViewModel : ViewModel() {
     private val _description      = MutableStateFlow("")
     private val _tags             = MutableStateFlow<List<String>>(emptyList())
     private val _selectedPhotoUri = MutableStateFlow<String?>(null)
+    private val _selectedDate     = MutableStateFlow(LocalDate.now())
+    private val _takenDates       = MutableStateFlow<Set<LocalDate>>(emptySet())
+    private val _isSaving         = MutableStateFlow(false)
 
-    val title:            StateFlow<String>       = _title.asStateFlow()
-    val description:      StateFlow<String>       = _description.asStateFlow()
-    val tags:             StateFlow<List<String>> = _tags.asStateFlow()
-    val selectedPhotoUri: StateFlow<String?>      = _selectedPhotoUri.asStateFlow()
+    val title:            StateFlow<String>         = _title.asStateFlow()
+    val description:      StateFlow<String>         = _description.asStateFlow()
+    val tags:             StateFlow<List<String>>   = _tags.asStateFlow()
+    val selectedPhotoUri: StateFlow<String?>        = _selectedPhotoUri.asStateFlow()
+    val selectedDate:     StateFlow<LocalDate>      = _selectedDate.asStateFlow()
+    val takenDates:       StateFlow<Set<LocalDate>> = _takenDates.asStateFlow()
+    val isSaving:         StateFlow<Boolean>        = _isSaving.asStateFlow()
+
+    sealed class SaveEvent {
+        object Success : SaveEvent()
+        data class Error(val message: String) : SaveEvent()
+    }
+
+    private val _events = Channel<SaveEvent>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
 
     private var joinEntryId: String? = null
     private var loaded = false
 
     val isJoinMode: Boolean get() = joinEntryId != null
 
+    /**
+     * Pre-loads title + tags from an existing entry when joining it (title +
+     * tags are then read-only). No-op when creating a new time point.
+     */
     fun loadIfNeeded(groupId: String, entryId: String?) {
         if (loaded) return
         loaded = true
@@ -43,11 +67,35 @@ class ScrapbookViewModel : ViewModel() {
                 _tags.value  = existing.tags
             }
         }
+        loadTakenDates(groupId)
+    }
+
+    /**
+     * Loads the days in the current month that already have a post, so the
+     * date picker can gray them out.
+     */
+    private fun loadTakenDates(groupId: String) {
+        val scrapbookId = YearMonth.now().toString()
+        viewModelScope.launch {
+            try {
+                val snapshot = FirebaseModule.db.collection("groups").document(groupId)
+                    .collection("scrapbooks").document(scrapbookId)
+                    .collection("posts")
+                    .get().await()
+                val zone = ZoneId.systemDefault()
+                _takenDates.value = snapshot.documents.mapNotNull { doc ->
+                    doc.getTimestamp("date")?.toDate()?.toInstant()?.atZone(zone)?.toLocalDate()
+                }.toSet()
+            } catch (_: Exception) {
+                // Leave taken dates empty on failure.
+            }
+        }
     }
 
     fun onTitleChange(value: String)       { _title.value = value }
     fun onDescriptionChange(value: String) { _description.value = value }
     fun onPhotoSelected(uri: String)       { _selectedPhotoUri.value = uri }
+    fun onDateSelected(date: LocalDate)    { _selectedDate.value = date }
 
     fun onAddTag(tag: String) {
         if (tag.isBlank()) return
@@ -58,38 +106,41 @@ class ScrapbookViewModel : ViewModel() {
         _tags.value = _tags.value.filter { it != tag }
     }
 
-    /**
-     * What: True once the form has enough to save: always a photo, plus a title
-     *       when creating a new time point.
-     * Who: Used by ScrapbookScreen to enable/disable the save button.
-     */
     val canSave: Boolean
         get() = _selectedPhotoUri.value != null && (isJoinMode || _title.value.isNotBlank())
 
     /**
-     * What: Persists the contribution — creating a new time point or appending to
-     *       an existing one — then signals completion.
-     * Who: Called by ScrapbookScreen when the user taps save.
-     * When: On save, only when canSave is true.
+     * Persists the post — creating a brand-new one or appending to an
+     * existing one — then signals completion via the events channel.
+     * The `today` String param is kept so the screen's call site is unchanged;
+     * the real persisted date comes from `_selectedDate`.
      */
     fun save(groupId: String, today: String) {
-        val photo = _selectedPhotoUri.value ?: return
-        val contribution = MemberContribution(
-            memberName  = CurrentUser.name,
-            photoUri    = photo,
-            description = _description.value.trim()
-        )
-        val joinId = joinEntryId
-        if (joinId != null) {
-            ScrapbookRepository.addContribution(groupId, joinId, contribution)
-        } else {
-            ScrapbookRepository.addEntry(
-                groupId           = groupId,
-                date              = today,
-                title             = _title.value.trim(),
-                tags              = _tags.value,
-                firstContribution = contribution
-            )
+        if (_selectedPhotoUri.value == null) return
+        if (_isSaving.value) return
+        val photoUri    = _selectedPhotoUri.value!!
+        val description = _description.value.trim()
+        val joinId      = joinEntryId
+        viewModelScope.launch {
+            _isSaving.value = true
+            try {
+                ScrapbookRepository.addPost(
+                    groupId          = groupId,
+                    title            = _title.value.trim(),
+                    tags             = _tags.value,
+                    description      = description,
+                    selectedPhotoUri = photoUri,
+                    date             = _selectedDate.value,
+                    joinPostId       = joinId
+                )
+                _events.send(SaveEvent.Success)
+            } catch (e: Exception) {
+                _events.send(
+                    SaveEvent.Error(e.message ?: "Couldn't save your memory. Please try again.")
+                )
+            } finally {
+                _isSaving.value = false
+            }
         }
     }
 }

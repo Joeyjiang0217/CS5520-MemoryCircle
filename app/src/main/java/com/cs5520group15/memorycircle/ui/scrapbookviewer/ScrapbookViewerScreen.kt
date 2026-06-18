@@ -21,10 +21,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.cs5520group15.memorycircle.R
-import com.cs5520group15.memorycircle.data.CurrentUser
+import com.cs5520group15.memorycircle.model.Photo
 import com.cs5520group15.memorycircle.data.ScrapbookRepository
 import com.cs5520group15.memorycircle.model.Comment
-import com.cs5520group15.memorycircle.model.MemberContribution
 import com.cs5520group15.memorycircle.model.ScrapbookEntry
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.EmptyHint
@@ -106,7 +105,7 @@ fun ScrapbookViewerScreen(
                 TimelineEntry(
                     entry         = entry,
                     onSaveTitle   = { title -> viewModel.updateEntryTitle(entry.id, title) },
-                    onPostComment = { text -> viewModel.addComment(entry.id, author = CurrentUser.name, text = text) },
+                    onPostComment = { text -> viewModel.addComment(entry.id, author = "", text = text) },
                     onJoin        = { onJoinEntry(entry.id) }
                 )
             }
@@ -202,7 +201,7 @@ private fun MemoryCard(
                 verticalAlignment     = Alignment.CenterVertically
             ) {
                 Text(
-                    text  = "👥 ${entry.contributions.size} members",
+                    text  = "📸 ${entry.photos.size} photos",
                     style = MaterialTheme.typography.labelSmall,
                     color = Brown
                 )
@@ -258,8 +257,8 @@ private fun MemoryCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                entry.contributions.forEach { contribution ->
-                    ContributionBlock(contribution)
+                entry.photos.forEach { photo ->
+                    PhotoBlock(photo = photo, authorName = entry.authorName)
                 }
             }
 
@@ -323,11 +322,11 @@ private fun MemoryCard(
 }
 
 @Composable
-private fun ContributionBlock(contribution: MemberContribution) {
+private fun PhotoBlock(photo: Photo, authorName: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AsyncImage(
-            model              = contribution.photoUri,
-            contentDescription = "${contribution.memberName}'s photo",
+            model              = photo.url,
+            contentDescription = "$authorName's photo",
             contentScale       = ContentScale.Crop,
             modifier           = Modifier
                 .fillMaxWidth()
@@ -335,17 +334,17 @@ private fun ContributionBlock(contribution: MemberContribution) {
                 .clip(RoundedCornerShape(8.dp))
         )
         Row(verticalAlignment = Alignment.Top) {
-            AvatarCircle(name = contribution.memberName, size = 28.dp)
+            AvatarCircle(name = authorName, size = 28.dp)
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text  = contribution.memberName,
+                    text  = authorName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Brown
                 )
-                if (contribution.description.isNotBlank()) {
+                if (photo.description.isNotBlank()) {
                     Text(
-                        text  = contribution.description,
+                        text  = photo.description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Ink
                     )
@@ -359,7 +358,7 @@ private fun ContributionBlock(contribution: MemberContribution) {
 private fun CommentRow(comment: Comment) {
     Row {
         Text(
-            text  = comment.author,
+            text  = comment.authorName,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
             color = Brown
         )
