@@ -139,9 +139,7 @@ fun GroupDetailScreen(
             confirmColor = Brown,
             onConfirm    = {
                 showLeaveDialog = false
-                // Actual "leave group" wiring (call repo, pop back to Home) lands
-                // when the group repository / Firestore layer is in place.
-                onBack()
+                viewModel.leaveGroup(onDone = onBack)
             },
             onDismiss    = { showLeaveDialog = false }
         )

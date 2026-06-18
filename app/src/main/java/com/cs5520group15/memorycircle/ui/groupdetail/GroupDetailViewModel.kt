@@ -1,10 +1,14 @@
 package com.cs5520group15.memorycircle.ui.groupdetail
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.cs5520group15.memorycircle.data.AuthRepository
+import com.cs5520group15.memorycircle.data.GroupRepository
 import com.cs5520group15.memorycircle.model.Member
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * What: Holds the state shown on the group detail page — the group name, the
@@ -38,10 +42,28 @@ class GroupDetailViewModel : ViewModel() {
     val members:   StateFlow<List<Member>>        = _members.asStateFlow()
     val months:    StateFlow<List<MonthScrapbook>> = _months.asStateFlow()
 
+    private var boundGroupId: String? = null
+
     fun bind(groupId: String) {
+        boundGroupId = groupId
         _groupName.value = mockGroupName(groupId)
         _members.value   = mockMembers(groupId)
         _months.value    = mockMonths(groupId)
+    }
+
+    /**
+     * Removes the current user from the bound group in Firestore. Invokes
+     * `onDone` once the write completes so the screen can navigate back.
+     * On failure the user stays on the screen — callers can wire an error
+     * channel later if richer feedback is needed.
+     */
+    fun leaveGroup(onDone: () -> Unit) {
+        val groupId = boundGroupId ?: return
+        val uid = AuthRepository.currentUid ?: return
+        viewModelScope.launch {
+            runCatching { GroupRepository.leaveGroup(groupId, uid) }
+                .onSuccess { onDone() }
+        }
     }
 
     private fun mockGroupName(groupId: String): String = when (groupId) {

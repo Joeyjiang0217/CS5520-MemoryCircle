@@ -55,11 +55,17 @@ fun ScrapbookViewerScreen(
     val entriesFlow = remember(groupId) { ScrapbookRepository.entriesFor(groupId) }
     val entries by entriesFlow.collectAsStateWithLifecycle()
 
+    val monthTitle = remember {
+        java.time.YearMonth.now().format(
+            java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy", java.util.Locale.ENGLISH)
+        )
+    }
+
     Scaffold(
         containerColor = Cream,
         topBar = {
             MemoryCircleTopBar(
-                title    = "June 2025",
+                title    = monthTitle,
                 showBack = true,
                 onBack   = onBack,
                 actions  = {
