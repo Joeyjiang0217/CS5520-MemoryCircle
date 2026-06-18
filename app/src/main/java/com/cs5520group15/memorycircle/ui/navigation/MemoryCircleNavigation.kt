@@ -8,10 +8,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.ui.addfriend.AddFriendScreen
 import com.cs5520group15.memorycircle.ui.addfriendsearch.AddFriendSearchScreen
 import com.cs5520group15.memorycircle.ui.avatarviewer.AvatarViewerScreen
 import com.cs5520group15.memorycircle.ui.creategroup.CreateGroupScreen
+import com.cs5520group15.memorycircle.ui.devtools.DevToolsScreen
 import com.cs5520group15.memorycircle.ui.editprofile.EditProfileScreen
 import com.cs5520group15.memorycircle.ui.friendrequests.AllFriendRequestsScreen
 import com.cs5520group15.memorycircle.ui.friends.FriendsScreen
@@ -67,9 +69,14 @@ fun MemoryCircleNavigation() {
         }
     }
 
+    // Auth persistence: if Firebase already has a signed-in user (cached on
+    // disk by the SDK across app restarts), skip Login and land on Home.
+    val startDestination: Any =
+        if (AuthRepository.currentUid != null) Home else Login
+
     NavHost(
         navController    = navController,
-        startDestination = Login
+        startDestination = startDestination
     ) {
 
         composable<Login> {
@@ -238,7 +245,9 @@ fun MemoryCircleNavigation() {
                 onBack                      = { navController.popBackStack() },
                 onOpenProfile               = { navController.navigate(EditProfile) },
                 onOpenNotificationSettings  = { navController.navigate(NotificationSettings) },
+                onOpenDevTools              = { navController.navigate(DevTools) },
                 onLogout                    = {
+                    AuthRepository.logout()
                     navController.navigate(Login) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -248,6 +257,12 @@ fun MemoryCircleNavigation() {
 
         composable<NotificationSettings> {
             NotificationSettingsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable<DevTools> {
+            DevToolsScreen(
                 onBack = { navController.popBackStack() }
             )
         }

@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.SolidColor
@@ -33,12 +34,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.model.Friend
+import kotlinx.coroutines.launch
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.EmptyHint
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.common.PrimaryButton
 import com.cs5520group15.memorycircle.ui.common.SecondaryOutlinedButton
+import com.cs5520group15.memorycircle.ui.common.brandFieldColors
 import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
@@ -83,6 +87,7 @@ fun CreateGroupScreen(
     val contacts    by viewModel.contacts.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
     val query       by viewModel.query.collectAsStateWithLifecycle()
+    val groupName   by viewModel.groupName.collectAsStateWithLifecycle()
 
     val selectedContacts = remember(contacts, selectedIds) {
         contacts.filter { it.id in selectedIds }
@@ -110,6 +115,8 @@ fun CreateGroupScreen(
     val ctaLabel = if (isInviteMode) "Invite Now"         else "Create Now"
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val snackScope = rememberCoroutineScope()
 
     // One-shot events from the ViewModel: Created(groupId) → caller's onCreated;
     // ShowSnackbar → snackbar host. Collected via LaunchedEffect so cancellation
@@ -123,11 +130,19 @@ fun CreateGroupScreen(
         }
     }
 
+    // Pre-check connectivity before calling onCreateClick. Without this, Firestore's
+    // offline persistence silently queues the write into a local cache and lets the
+    // user think it "succeeded" — then the doc materializes when the device comes
+    // back online. We want the user to know up-front that they're offline.
     val onConfirm: () -> Unit = {
-        if (isInviteMode) {
-            onInvite(selectedIds.toList())
-        } else {
-            viewModel.onCreateClick()
+        when {
+            isInviteMode -> onInvite(selectedIds.toList())
+            !NetworkUtil.isOnline(context) -> {
+                snackScope.launch {
+                    snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                }
+            }
+            else -> viewModel.onCreateClick()
         }
     }
 
@@ -157,6 +172,19 @@ fun CreateGroupScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (!isInviteMode) {
+                OutlinedTextField(
+                    value           = groupName,
+                    onValueChange   = viewModel::onGroupNameChange,
+                    label           = { Text("Group name") },
+                    singleLine      = true,
+                    colors          = brandFieldColors(),
+                    modifier        = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
             if (isSearchActive) {
                 ActiveSearchRow(
                     query          = query,

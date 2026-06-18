@@ -39,10 +39,12 @@ class CreateGroupViewModel : ViewModel() {
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _query       = MutableStateFlow("")
     private val _isLoading   = MutableStateFlow(false)
+    private val _groupName   = MutableStateFlow("")
 
     val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
     val query:       StateFlow<String>      = _query.asStateFlow()
     val isLoading:   StateFlow<Boolean>     = _isLoading.asStateFlow()
+    val groupName:   StateFlow<String>      = _groupName.asStateFlow()
 
     /** Source of contacts the picker offers — the user's existing friend list. */
     val contacts: StateFlow<List<Friend>> = FriendsRepository.friends
@@ -67,6 +69,8 @@ class CreateGroupViewModel : ViewModel() {
     fun onQueryChange(value: String) { _query.value = value }
     fun clearQuery()                 { _query.value = "" }
 
+    fun onGroupNameChange(value: String) { _groupName.value = value }
+
     /**
      * Case-insensitive substring filter against name OR email. Empty / blank
      * queries return an empty list so the caller can simply check isEmpty()
@@ -87,20 +91,22 @@ class CreateGroupViewModel : ViewModel() {
      *       seeds the current month's scrapbook. Emits Created(groupId) on
      *       success so the screen can navigate to the new timeline.
      *
-     *       Group name + color are placeholders for now — a name TextField
-     *       can be added to the picker UI later to surface them.
+     *       The card color is not yet user-configurable, so the field is
+     *       omitted from the group doc — HomeViewModel reads it with a
+     *       "brown" fallback so existing cards render the same. Add a color
+     *       picker to the screen later and put "colorType" back into the
+     *       write to surface it.
      * Who: Called by CreateGroupScreen when the user taps "Create Now".
      * When: On Create-button click.
      */
-    fun onCreateClick(
-        groupName: String = "New Group",
-        colorType: String = "brown"
-    ) = viewModelScope.launch {
+    fun onCreateClick() = viewModelScope.launch {
         val uid = AuthRepository.currentUid
         if (uid == null) {
             _events.send(CreateGroupEvent.ShowSnackbar("You must be logged in to create a group"))
             return@launch
         }
+
+        val name = _groupName.value.trim().ifBlank { "New Group" }
 
         _isLoading.value = true
         try {
@@ -115,8 +121,7 @@ class CreateGroupViewModel : ViewModel() {
             // 1) Group document
             groupRef.set(mapOf(
                 "groupId"     to groupId,
-                "name"        to groupName,
-                "colorType"   to colorType,
+                "name"        to name,
                 "createdAt"   to FieldValue.serverTimestamp(),
                 "ownerId"     to uid,
                 "memberIds"   to allMemberIds,
