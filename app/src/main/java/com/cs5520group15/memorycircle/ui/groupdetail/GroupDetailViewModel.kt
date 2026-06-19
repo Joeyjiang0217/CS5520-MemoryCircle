@@ -135,6 +135,19 @@ class GroupDetailViewModel : ViewModel() {
     }
 
     /**
+     * Renames the bound group. Anyone in the group can rename — no isOwner
+     * gate here. Blank names are silently ignored by the repository.
+     * The group listener will pick up the new name and republish, so the UI
+     * updates without a manual refresh.
+     */
+    fun renameGroup(newName: String) {
+        val groupId = boundGroupId ?: return
+        viewModelScope.launch {
+            runCatching { GroupRepository.renameGroup(groupId, newName) }
+        }
+    }
+
+    /**
      * Owner-only: remove a specific member from the group. UI gates this
      * behind isOwner; the repository call still runs without a guard so a
      * misuse would surface as a Firestore rule error (when rules land).

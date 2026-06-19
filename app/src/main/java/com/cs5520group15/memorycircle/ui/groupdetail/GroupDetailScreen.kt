@@ -71,6 +71,11 @@ fun GroupDetailScreen(
     var showLeaveDialog       by remember { mutableStateOf(false) }
     var showDeleteGroupDialog by remember { mutableStateOf(false) }
     var memberToKick          by remember { mutableStateOf<Member?>(null) }
+    // Owner-only "delete members" mode. While true, every non-self member
+    // thumbnail shows a red × badge that triggers the kick-confirm dialog.
+    // While false (default), the avatars stay clean — fixes the easy-to-mistap
+    // problem when users just want to tap through to a member profile.
+    var inMembersEditMode     by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Cream,
@@ -99,7 +104,11 @@ fun GroupDetailScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             item {
-                GroupNameHero(groupName = groupName, memberCount = members.size)
+                GroupNameHero(
+                    groupName    = groupName,
+                    memberCount  = members.size,
+                    onRename     = { newName -> viewModel.renameGroup(newName) }
+                )
             }
 
             item {
@@ -107,9 +116,11 @@ fun GroupDetailScreen(
                     members             = members,
                     isOwner             = isOwner,
                     currentUid          = currentUid,
+                    inEditMode          = inMembersEditMode,
                     onMemberClick       = onOpenMemberProfile,
                     onSeeAllClick       = onOpenAllMembers,
                     onInviteClick       = onInviteMember,
+                    onToggleEditMode    = { inMembersEditMode = !inMembersEditMode },
                     onKickMember        = { member -> memberToKick = member }
                 )
             }
@@ -202,13 +213,58 @@ fun GroupDetailScreen(
 }
 
 @Composable
-private fun GroupNameHero(groupName: String, memberCount: Int) {
+private fun GroupNameHero(
+    groupName:   String,
+    memberCount: Int,
+    onRename:    (String) -> Unit
+) {
+    // Local edit state — tap the name to enter editing, tap save / cancel to
+    // exit. Open to all members by product decision. The Firestore listener
+    // upstream republishes the canonical name once the write confirms.
+    var isEditing by remember { mutableStateOf(false) }
+    var draft     by remember(groupName) { mutableStateOf(groupName) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text  = groupName.ifBlank { "Group" },
-            style = MaterialTheme.typography.headlineMedium,
-            color = Ink
-        )
+        if (isEditing) {
+            OutlinedTextField(
+                value         = draft,
+                onValueChange = { draft = it },
+                modifier      = Modifier.fillMaxWidth(),
+                singleLine    = true,
+                shape         = RoundedCornerShape(12.dp),
+                placeholder   = { Text("Group name") }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = {
+                    draft = groupName        // reset
+                    isEditing = false
+                }) {
+                    Text("Cancel", color = Brown)
+                }
+                TextButton(
+                    onClick = {
+                        if (draft.isNotBlank() && draft != groupName) onRename(draft)
+                        isEditing = false
+                    },
+                    enabled = draft.isNotBlank()
+                ) {
+                    Text("Save", color = AccentGreen)
+                }
+            }
+        } else {
+            Text(
+                text  = groupName.ifBlank { "Group" },
+                style = MaterialTheme.typography.headlineMedium,
+                color = Ink,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        draft = groupName
+                        isEditing = true
+                    }
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text  = "$memberCount ${if (memberCount == 1) "member" else "members"}",
@@ -220,13 +276,15 @@ private fun GroupNameHero(groupName: String, memberCount: Int) {
 
 @Composable
 private fun MembersCard(
-    members:       List<Member>,
-    isOwner:       Boolean,
-    currentUid:    String?,
-    onMemberClick: (String) -> Unit,
-    onSeeAllClick: () -> Unit,
-    onInviteClick: () -> Unit,
-    onKickMember:  (Member) -> Unit
+    members:          List<Member>,
+    isOwner:          Boolean,
+    currentUid:       String?,
+    inEditMode:       Boolean,
+    onMemberClick:    (String) -> Unit,
+    onSeeAllClick:    () -> Unit,
+    onInviteClick:    () -> Unit,
+    onToggleEditMode: () -> Unit,
+    onKickMember:     (Member) -> Unit
 ) {
     Card(
         modifier  = Modifier.fillMaxWidth(),
@@ -255,12 +313,14 @@ private fun MembersCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             ThumbnailGrid(
-                members       = members,
-                isOwner       = isOwner,
-                currentUid    = currentUid,
-                onMemberClick = onMemberClick,
-                onInviteClick = onInviteClick,
-                onKickMember  = onKickMember
+                members          = members,
+                isOwner          = isOwner,
+                currentUid       = currentUid,
+                inEditMode       = inEditMode,
+                onMemberClick    = onMemberClick,
+                onInviteClick    = onInviteClick,
+                onToggleEditMode = onToggleEditMode,
+                onKickMember     = onKickMember
             )
         }
     }
@@ -268,44 +328,61 @@ private fun MembersCard(
 
 @Composable
 private fun ThumbnailGrid(
-    members:       List<Member>,
-    isOwner:       Boolean,
-    currentUid:    String?,
-    onMemberClick: (String) -> Unit,
-    onInviteClick: () -> Unit,
-    onKickMember:  (Member) -> Unit
+    members:          List<Member>,
+    isOwner:          Boolean,
+    currentUid:       String?,
+    inEditMode:       Boolean,
+    onMemberClick:    (String) -> Unit,
+    onInviteClick:    () -> Unit,
+    onToggleEditMode: () -> Unit,
+    onKickMember:     (Member) -> Unit
 ) {
     val columns = 5
-    val slots: List<Member?> = members + listOf<Member?>(null)
-    val rows = slots.chunked(columns)
+    // Trailing tiles: always Invite; owner additionally sees Remove (which
+    // toggles edit mode). Members are followed by these tiles in render order.
+    val trailing: List<TileType> = if (isOwner) listOf(TileType.Invite, TileType.Remove)
+                                   else        listOf(TileType.Invite)
+    val totalSlots = members.size + trailing.size
+    val rowCount   = (totalSlots + columns - 1) / columns
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        rows.forEach { row ->
+        for (r in 0 until rowCount) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                row.forEach { slot ->
+                for (c in 0 until columns) {
+                    val index = r * columns + c
                     Box(modifier = Modifier.weight(1f)) {
-                        if (slot != null) {
-                            // Owner sees a kick × overlay on every member
-                            // that isn't themselves.
-                            val showKick = isOwner && slot.id != currentUid
-                            MemberThumbnail(
-                                member       = slot,
-                                onClick      = { onMemberClick(slot.id) },
-                                showKick     = showKick,
-                                onKickClick  = { onKickMember(slot) }
-                            )
-                        } else {
-                            InviteThumbnail(onClick = onInviteClick)
+                        when {
+                            index < members.size -> {
+                                val slot = members[index]
+                                // × badge appears only in edit mode, only for
+                                // owner, only on members other than yourself.
+                                val showKick = isOwner && inEditMode && slot.id != currentUid
+                                MemberThumbnail(
+                                    member      = slot,
+                                    onClick     = { onMemberClick(slot.id) },
+                                    showKick    = showKick,
+                                    onKickClick = { onKickMember(slot) }
+                                )
+                            }
+                            index - members.size < trailing.size -> {
+                                when (trailing[index - members.size]) {
+                                    TileType.Invite -> InviteThumbnail(onClick = onInviteClick)
+                                    TileType.Remove -> RemoveThumbnail(
+                                        active  = inEditMode,
+                                        onClick = onToggleEditMode
+                                    )
+                                }
+                            }
+                            else -> { /* blank cell */ }
                         }
                     }
-                }
-                repeat(columns - row.size) {
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
     }
 }
+
+private enum class TileType { Invite, Remove }
 
 @Composable
 private fun MemberThumbnail(
@@ -396,6 +473,52 @@ private fun InviteThumbnail(onClick: () -> Unit) {
             text       = "Invite",
             style      = MaterialTheme.typography.bodyMedium,
             color      = InkSecondary,
+            maxLines   = 1,
+            textAlign  = TextAlign.Center,
+            modifier   = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+/**
+ * Owner-only tile that toggles the members-edit mode. While active, the rest
+ * of the member thumbnails grow a red × badge that triggers the kick-confirm
+ * dialog. Active state is shown with a red border + label so the user has a
+ * clear "I'm in delete-mode" affordance.
+ */
+@Composable
+private fun RemoveThumbnail(
+    active:  Boolean,
+    onClick: () -> Unit
+) {
+    val accent = if (active) DeleteRed else Brown
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier            = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(vertical = 4.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Beige.copy(alpha = 0.4f))
+                .border(1.dp, accent.copy(alpha = 0.5f), CircleShape)
+        ) {
+            Icon(
+                painter            = painterResource(R.drawable.ic_close),
+                contentDescription = if (active) "Done removing" else "Remove members",
+                tint               = accent
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text       = if (active) "Done" else "Remove",
+            style      = MaterialTheme.typography.bodyMedium,
+            color      = if (active) DeleteRed else InkSecondary,
             maxLines   = 1,
             textAlign  = TextAlign.Center,
             modifier   = Modifier.fillMaxWidth()

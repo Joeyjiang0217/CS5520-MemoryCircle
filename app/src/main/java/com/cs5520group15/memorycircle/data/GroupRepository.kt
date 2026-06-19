@@ -63,6 +63,18 @@ object GroupRepository {
         }
     }
 
+    /**
+     * Renames the group. Open to any member by product decision — there's no
+     * owner-only gate here. Blank names are treated as no-ops so a typo + save
+     * doesn't wipe the existing name.
+     */
+    suspend fun renameGroup(groupId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) return
+        db.collection("groups").document(groupId)
+            .update("name", trimmed).await()
+    }
+
     /** Owner-only on the caller side. Removes a specific member from a group. */
     suspend fun kickMember(groupId: String, memberUid: String) {
         db.collection("groups").document(groupId).update(mapOf(
