@@ -3,7 +3,9 @@ package com.cs5520group15.memorycircle.data
 import com.cs5520group15.memorycircle.model.Friend
 import com.cs5520group15.memorycircle.model.FriendRequest
 import com.cs5520group15.memorycircle.model.GroupSummary
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,14 +29,24 @@ import kotlinx.coroutines.tasks.await
  *       fires the corresponding listener and the friend / group flow
  *       republishes — no manual cache invalidation, no waiting on a refresh.
  *
- *       Friend requests, the search "discoverable pool", and the locally-sent
- *       invite set still live in mock — Firestore wiring for those lands in
- *       the next turn.
+ *       Friend requests are also live: incomingRequests is subscribed
+ *       (orderBy requestedAt desc). Pending docs are unbounded; the
+ *       actioned-history (ACCEPTED + DECLINED) is capped at 10 in the DB
+ *       itself by pruneActionedHistory, which runs after every accept /
+ *       decline — so storage doesn't bloat indefinitely and the UI shows
+ *       exactly what's in the DB. accept/decline flip the `status` field
+ *       on the incoming doc (kept around so the See-all page still shows
+ *       the history row) while removing the sender's outgoingRequest;
+ *       only a manual deleteRequest actually drops the row.
+ *
+ *       The "discoverable" pool and the locally-sent invite set are still
+ *       mock — kept around so older surfaces compile, but nothing in the
+ *       UI consumes them today.
  *
  * Who: Used by FriendsViewModel, FriendsSearchViewModel, and
- *      AllFriendRequestsScreen.
- * When: bind() is called from FriendsViewModel.init; listeners detach on
- *       logout / when no user is signed in.
+ *      AllFriendRequestsViewModel.
+ * When: bind() is called from FriendsViewModel.init / the See-all VM's
+ *       init; listeners detach on logout or when no user is signed in.
  */
 object FriendsRepository {
 
@@ -61,6 +73,7 @@ object FriendsRepository {
     private var friendsListener:          ListenerRegistration? = null
     private var groupsListener:           ListenerRegistration? = null
     private var outgoingRequestsListener: ListenerRegistration? = null
+    private var incomingRequestsListener: ListenerRegistration? = null
     private var boundUid:                 String? = null
 
     /**
@@ -138,6 +151,46 @@ object FriendsRepository {
                 if (err != null || snap == null) return@addSnapshotListener
                 _outgoingRequests.value = snap.documents.map { it.id }.toSet()
             }
+
+        // 4) Incoming friend requests — drives the FRIEND REQUESTS preview on
+        //    FriendsScreen and the full list on AllFriendRequestsScreen.
+        //    Each doc id is the sender uid; accepted/declined docs remain in
+        //    the subcollection with a status marker (only manual delete
+        //    actually removes them).
+        //
+        //    The actioned-history cap is enforced at WRITE time —
+        //    pruneActionedHistory(uid) runs after every accept / decline so
+        //    the subcollection never holds more than 10 actioned docs. The
+        //    listener mirrors whatever is in the DB; pending is unbounded,
+        //    so the orderBy + limit(200) is just a safety ceiling for the
+        //    pathological pending case.
+        incomingRequestsListener = db.collection("users").document(uid)
+            .collection("incomingRequests")
+            .orderBy("requestedAt", Query.Direction.DESCENDING)
+            .limit(200)
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null) return@addSnapshotListener
+                val all = snap.documents.map { doc ->
+                    val statusStr = doc.getString("status").orEmpty().uppercase()
+                    val status = runCatching { FriendRequest.Status.valueOf(statusStr) }
+                        .getOrDefault(FriendRequest.Status.PENDING)
+                    FriendRequest(
+                        id             = doc.id,
+                        fromUserId     = doc.id,
+                        fromUserName   = doc.getString("name").orEmpty(),
+                        fromUserEmail  = "",      // public users doc no longer carries email
+                        mutualFriends  = 0,       // not computed (would require a friends ∩ friends scan)
+                        status         = status,
+                        fromUserBio    = doc.getString("bio").orEmpty()
+                    )
+                }
+                // Pending first (newest by requestedAt), then actioned (also
+                // newest first via the orderBy). DB cap means actioned size
+                // is always ≤ 10; no client-side slice needed.
+                val pending  = all.filter { it.status == FriendRequest.Status.PENDING }
+                val actioned = all.filter { it.status != FriendRequest.Status.PENDING }
+                _requests.value = pending + actioned
+            }
     }
 
     /**
@@ -210,12 +263,14 @@ object FriendsRepository {
         friendsListener?.remove();          friendsListener          = null
         groupsListener?.remove();           groupsListener           = null
         outgoingRequestsListener?.remove(); outgoingRequestsListener = null
+        incomingRequestsListener?.remove(); incomingRequestsListener = null
         userListeners.values.forEach { it.remove() }
         userListeners.clear()
         userCards.clear()
-        lastFriendUids        = emptyList()
-        lastGroups            = emptyList()
+        lastFriendUids          = emptyList()
+        lastGroups              = emptyList()
         _outgoingRequests.value = emptySet()
+        _requests.value         = emptyList()
         boundUid = null
     }
 
@@ -326,11 +381,12 @@ object FriendsRepository {
                 "name"        to myName,
                 "avatarUrl"   to myAvatarUrl,
                 "bio"         to myBio,
-                "requestedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                "status"      to FriendRequest.Status.PENDING.name,
+                "requestedAt" to FieldValue.serverTimestamp()
             ))
             batch.set(outgoingRef, mapOf(
                 "uid"         to targetUid,
-                "requestedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                "requestedAt" to FieldValue.serverTimestamp()
             ))
         }.await()
     }
@@ -355,35 +411,66 @@ object FriendsRepository {
     }
 
     // ── Friend-request actions ──────────────────────────────────────────────
-    // Still mock-backed; Firestore wiring for requests lands next turn.
+    // requestId == sender's uid == incomingRequests doc id (the same value
+    // identifies the request across both subcollections).
 
     /**
-     * What: Marks a pending request as ACCEPTED and appends the sender to the
-     *       friend list. No-op if the request is missing or already actioned.
+     * What: Promotes a pending request to a real friendship. In one batch:
+     *         - writes both halves of the friendship
+     *         - flips the receiver's incoming doc `status` to ACCEPTED
+     *           (kept around so the receiver's See-all page can still show
+     *           the history row — only manual delete removes it)
+     *         - deletes the sender's outgoing doc so AddFriendSearch on
+     *           their device flips "Invitation sent" → "Added"
+     * Who: Called by FriendsViewModel / AllFriendRequestsViewModel.
+     * When: User taps the Accept pill on a PENDING row.
      */
-    fun accept(requestId: String) {
-        val req = _requests.value.firstOrNull { it.id == requestId } ?: return
-        if (req.status != FriendRequest.Status.PENDING) return
-        _requests.value = _requests.value.map {
-            if (it.id == requestId) it.copy(status = FriendRequest.Status.ACCEPTED) else it
-        }
-        if (_friends.value.none { it.id == req.fromUserId }) {
-            _friends.value = _friends.value + Friend(
-                id             = req.fromUserId,
-                name           = req.fromUserName,
-                email          = req.fromUserEmail,
-                sharedMemories = 0
-            )
-        }
+    suspend fun accept(requestId: String) {
+        val me = AuthRepository.currentUid ?: return
+        val senderUid = requestId
+        val incomingRef        = db.collection("users").document(me).collection("incomingRequests").document(senderUid)
+        val senderOutgoingRef  = db.collection("users").document(senderUid).collection("outgoingRequests").document(me)
+        val myFriendRef        = db.collection("users").document(me).collection("friends").document(senderUid)
+        val senderFriendRef    = db.collection("users").document(senderUid).collection("friends").document(me)
+
+        db.runBatch { batch ->
+            batch.set(myFriendRef, mapOf(
+                "uid"   to senderUid,
+                "since" to FieldValue.serverTimestamp()
+            ))
+            batch.set(senderFriendRef, mapOf(
+                "uid"   to me,
+                "since" to FieldValue.serverTimestamp()
+            ))
+            batch.update(incomingRef, mapOf(
+                "status"     to FriendRequest.Status.ACCEPTED.name,
+                "actionedAt" to FieldValue.serverTimestamp()
+            ))
+            batch.delete(senderOutgoingRef)
+        }.await()
+        pruneActionedHistory(me)
     }
 
-    /** Marks a pending request as DECLINED; stays in the list for the See-all page. */
-    fun decline(requestId: String) {
-        _requests.value = _requests.value.map {
-            if (it.id == requestId && it.status == FriendRequest.Status.PENDING)
-                it.copy(status = FriendRequest.Status.DECLINED)
-            else it
-        }
+    /**
+     * What: Marks the request as DECLINED on the receiver's side and clears
+     *       the sender's outgoing entry. The incoming doc is kept (status
+     *       changes to DECLINED) so the user can see who they previously
+     *       declined; manual delete is the only way to drop the row.
+     */
+    suspend fun decline(requestId: String) {
+        val me = AuthRepository.currentUid ?: return
+        val senderUid = requestId
+        val incomingRef       = db.collection("users").document(me).collection("incomingRequests").document(senderUid)
+        val senderOutgoingRef = db.collection("users").document(senderUid).collection("outgoingRequests").document(me)
+
+        db.runBatch { batch ->
+            batch.update(incomingRef, mapOf(
+                "status"     to FriendRequest.Status.DECLINED.name,
+                "actionedAt" to FieldValue.serverTimestamp()
+            ))
+            batch.delete(senderOutgoingRef)
+        }.await()
+        pruneActionedHistory(me)
     }
 
     /**
@@ -396,15 +483,63 @@ object FriendsRepository {
         _invitedUserIds.value = _invitedUserIds.value + userId
     }
 
-    /** Hard-removes a request entry. Never touches the friends list. */
-    fun deleteRequest(requestId: String) {
-        _requests.value = _requests.value.filterNot { it.id == requestId }
+    /**
+     * Hard-removes a request entry from the receiver's history. Never touches
+     * the friends list — a previously-accepted friend stays friends even if
+     * their request row is wiped, and pending/declined entries never produced
+     * a friendship so there is nothing to roll back.
+     */
+    suspend fun deleteRequest(requestId: String) {
+        val me = AuthRepository.currentUid ?: return
+        db.collection("users").document(me)
+            .collection("incomingRequests").document(requestId)
+            .delete().await()
     }
 
     /**
-     * Seeds the still-mock request queue and the demo "discoverable" pool so
-     * the friend-search / requests UIs have something to render against. The
-     * real friend list and group list come from Firestore via bind().
+     * What: Trims the actioned-request history (status == ACCEPTED or
+     *       DECLINED) on `users/{uid}/incomingRequests` down to the 10
+     *       most recent. Storage hygiene — without this, a user who
+     *       accepts hundreds of friends over time would accumulate
+     *       hundreds of dead docs in their inbox, costing reads on every
+     *       open of the Friends tab. Pending docs are never touched.
+     *
+     *       Called after every accept / decline; one call adds at most
+     *       one new actioned doc, so the overflow is at most one. The
+     *       prune still scans the whole subcollection to be self-healing
+     *       — if the DB drifts above 10 for any reason (legacy data,
+     *       partial writes, a missed prune call), the next accept /
+     *       decline fixes it.
+     *
+     *       Sort key is `actionedAt` (when the status flipped), falling
+     *       back to `requestedAt` so legacy docs without `actionedAt`
+     *       still sort sensibly. Missing both → seconds=0 → end of list,
+     *       so those get pruned first.
+     */
+    private suspend fun pruneActionedHistory(uid: String) {
+        val snap = db.collection("users").document(uid)
+            .collection("incomingRequests")
+            .get().await()
+
+        val actioned = snap.documents.filter {
+            val s = it.getString("status").orEmpty().uppercase()
+            s == "ACCEPTED" || s == "DECLINED"
+        }
+        if (actioned.size <= 10) return
+
+        val excess = actioned.sortedByDescending { doc ->
+            val ts = doc.getTimestamp("actionedAt") ?: doc.getTimestamp("requestedAt")
+            ts?.seconds ?: 0L
+        }.drop(10)
+
+        db.runBatch { batch ->
+            excess.forEach { batch.delete(it.reference) }
+        }.await()
+    }
+
+    /**
+     * Seeds the demo "discoverable" pool. The real friend / group / request
+     * lists come from Firestore via bind().
      */
     private fun seedMockRequestsAndDiscoverable() {
         _discoverableUsers.value = listOf(
@@ -418,14 +553,6 @@ object FriendsRepository {
             Friend("u_robin",  "Robin Lee",  "robin.lee@gmail.com",      0),
             Friend("u_ivy",    "Ivy Wang",   "ivy.wang@protonmail.com",  0),
             Friend("u_max",    "Max Foster", "max.foster@outlook.com",   0)
-        )
-
-        _requests.value = listOf(
-            FriendRequest("r1", "u_alex", "Alex Park",   "alex.park@gmail.com",   2),
-            FriendRequest("r2", "u_dan",  "Dan Patel",   "dan.patel@gmail.com",   0),
-            FriendRequest("r3", "u_mei",  "Mei Tanaka",  "mei.tanaka@gmail.com",  1),
-            FriendRequest("r4", "u_sam",  "Sam Rivera",  "sam.rivera@gmail.com",  3),
-            FriendRequest("r5", "u_ada",  "Ada Okafor",  "ada.okafor@gmail.com",  0)
         )
     }
 }

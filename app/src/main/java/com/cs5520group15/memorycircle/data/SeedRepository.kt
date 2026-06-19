@@ -331,18 +331,18 @@ object SeedRepository {
     }
 
     /**
-     * Impersonates "Test User N" accepting every incoming friend request in
-     * their `incomingRequests` subcollection. For each request:
-     *   - writes both sides of the friendship (users/{N}/friends/{from} +
-     *     users/{from}/friends/{N})
-     *   - deletes both sides of the request (incomingRequests/{from} on
-     *     user N, outgoingRequests/{N} on the sender)
-     * All four writes per request go in a single batch so the request can't
-     * survive in a half-deleted state.
+     * Impersonates "Test User N" accepting every PENDING incoming friend
+     * request in their `incomingRequests` subcollection. Mirrors the same
+     * batch shape FriendsRepository.accept uses for a real user tap:
+     *   - writes both sides of the friendship
+     *   - flips the incoming doc's `status` to ACCEPTED (kept so the
+     *     See-all history view still shows the row — only a manual swipe
+     *     delete removes it)
+     *   - deletes the sender's outgoingRequests/{N} entry so AddFriendSearch
+     *     on the sender's device flips "Invitation sent" → "Added".
      *
-     * Used by the Dev Tools button so the developer can verify the
-     * request → accept → friendship flow without signing in as the test
-     * user. Idempotent — re-running on an empty inbox is a no-op.
+     * Already-actioned (ACCEPTED / DECLINED) docs are skipped — re-running
+     * on a fully-actioned inbox is a no-op.
      */
     suspend fun acceptIncomingRequestsForTestUser(n: Int = 6): Int {
         val name = "Test User $n"
@@ -354,6 +354,12 @@ object SeedRepository {
 
         var accepted = 0
         incomingSnap.documents.forEach { reqDoc ->
+            val statusStr = reqDoc.getString("status").orEmpty().uppercase()
+            // Anything that isn't explicitly PENDING (or missing — treat as
+            // PENDING for legacy docs written before the status field
+            // existed) has already been actioned.
+            if (statusStr.isNotEmpty() && statusStr != "PENDING") return@forEach
+
             val fromUid = reqDoc.id
             runCatching {
                 val targetFriendRef = db.collection("users").document(targetUid)
@@ -372,7 +378,10 @@ object SeedRepository {
                         "uid"   to targetUid,
                         "since" to FieldValue.serverTimestamp()
                     ))
-                    batch.delete(reqDoc.reference)
+                    batch.update(reqDoc.reference, mapOf(
+                        "status"     to "ACCEPTED",
+                        "actionedAt" to FieldValue.serverTimestamp()
+                    ))
                     batch.delete(senderOutgoingRef)
                 }.await()
                 accepted++

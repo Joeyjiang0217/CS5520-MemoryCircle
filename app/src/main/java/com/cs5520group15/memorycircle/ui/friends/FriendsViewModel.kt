@@ -22,8 +22,12 @@ class FriendsViewModel : ViewModel() {
     val groups   = FriendsRepository.groups
     val requests = FriendsRepository.requests  // full list (incl. accepted/declined)
 
-    fun acceptRequest(id: String) = FriendsRepository.accept(id)
-    fun rejectRequest(id: String) = FriendsRepository.decline(id)
+    fun acceptRequest(id: String) = viewModelScope.launch {
+        runCatching { FriendsRepository.accept(id) }
+    }
+    fun rejectRequest(id: String) = viewModelScope.launch {
+        runCatching { FriendsRepository.decline(id) }
+    }
 
     /**
      * Symmetrically removes a friendship. The Firestore listener picks up the

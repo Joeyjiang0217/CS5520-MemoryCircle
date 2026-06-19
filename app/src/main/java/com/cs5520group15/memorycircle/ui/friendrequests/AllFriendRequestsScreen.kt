@@ -248,11 +248,12 @@ private fun RequestRow(
 private fun subtitleFor(request: FriendRequest): String = when (request.status) {
     FriendRequest.Status.ACCEPTED -> "Accepted"
     FriendRequest.Status.DECLINED -> "Declined"
-    FriendRequest.Status.PENDING  ->
-        if (request.mutualFriends > 0)
+    FriendRequest.Status.PENDING  -> when {
+        request.mutualFriends > 0 ->
             "${request.mutualFriends} mutual friend${if (request.mutualFriends == 1) "" else "s"}"
-        else
-            request.fromUserEmail
+        request.fromUserBio.isNotBlank() -> request.fromUserBio
+        else                             -> "Wants to be your friend"
+    }
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)

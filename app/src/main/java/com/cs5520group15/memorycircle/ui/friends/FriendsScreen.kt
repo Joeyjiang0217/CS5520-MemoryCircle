@@ -95,8 +95,9 @@ fun FriendsScreen(
 
     val tabBarHeightPx = with(LocalDensity.current) { 54.dp.roundToPx() }
 
-    val hasRequests = pendingRequests.isNotEmpty()
-    val tabBarIndex = remember(hasRequests) { if (hasRequests) 3 else 2 }
+    // Requests section is always rendered (so "See all" stays reachable
+    // even with zero pending), so the sticky tab row is always at index 3.
+    val tabBarIndex = 3
 
     val sectionIndices: Map<Char, Int> = remember(friendSections, tabBarIndex) {
         val map = mutableMapOf<Char, Int>()
@@ -157,17 +158,15 @@ fun FriendsScreen(
                     Spacer(modifier = Modifier.height(20.dp))
                 }
 
-                if (hasRequests) {
-                    item(key = "requests") {
-                        FriendRequestsSection(
-                            pending   = pendingRequests,
-                            onAccept  = viewModel::acceptRequest,
-                            onReject  = viewModel::rejectRequest,
-                            onOpenAll = onOpenAllRequests,
-                            modifier  = Modifier.padding(horizontal = 24.dp)
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-                    }
+                item(key = "requests") {
+                    FriendRequestsSection(
+                        pending   = pendingRequests,
+                        onAccept  = viewModel::acceptRequest,
+                        onReject  = viewModel::rejectRequest,
+                        onOpenAll = onOpenAllRequests,
+                        modifier  = Modifier.padding(horizontal = 24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
 
                 stickyHeader(key = "tabs") {
@@ -319,6 +318,17 @@ private fun Header(
     }
 }
 
+/**
+ * What: The "FRIEND REQUESTS (N)" block on the Friends landing tab. Always
+ *       renders the header + "See all ›" so the user can reach
+ *       AllFriendRequestsScreen (and inspect their actioned history) even
+ *       when no PENDING requests exist. The latest-pending preview card
+ *       only renders when there's something to act on; the count `N`
+ *       always tracks the PENDING total (actioned history doesn't inflate
+ *       it).
+ * Who: Called from FriendsScreen's LazyColumn.
+ * When: Every recomposition of the Friends tab.
+ */
 @Composable
 private fun FriendRequestsSection(
     pending:   List<FriendRequest>,
@@ -327,8 +337,7 @@ private fun FriendRequestsSection(
     onOpenAll: () -> Unit,
     modifier:  Modifier = Modifier
 ) {
-    if (pending.isEmpty()) return
-    val newest = pending.first()
+    val newest = pending.firstOrNull()
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader(
@@ -347,11 +356,13 @@ private fun FriendRequestsSection(
             }
         )
 
-        FriendRequestCard(
-            request  = newest,
-            onAccept = { onAccept(newest.id) },
-            onReject = { onReject(newest.id) }
-        )
+        if (newest != null) {
+            FriendRequestCard(
+                request  = newest,
+                onAccept = { onAccept(newest.id) },
+                onReject = { onReject(newest.id) }
+            )
+        }
     }
 }
 
@@ -384,10 +395,7 @@ private fun FriendRequestCard(
                     color = Ink
                 )
                 Text(
-                    text  = if (request.mutualFriends > 0)
-                                "${request.mutualFriends} mutual friend${if (request.mutualFriends == 1) "" else "s"}"
-                            else
-                                request.fromUserEmail,
+                    text  = requestSubtitle(request),
                     style = MaterialTheme.typography.bodyMedium,
                     color = InkTertiary
                 )
@@ -397,6 +405,19 @@ private fun FriendRequestCard(
             DeclineCircleButton(onClick = onReject)
         }
     }
+}
+
+/**
+ * Subtitle fallback for a friend-request row. Mutual-friend count wins when
+ * we have one (currently always 0 — would require a friends ∩ friends scan
+ * we don't run yet); otherwise the sender's bio if non-empty; else a fixed
+ * "Wants to be your friend" line so the row never looks half-rendered.
+ */
+private fun requestSubtitle(request: FriendRequest): String = when {
+    request.mutualFriends > 0 ->
+        "${request.mutualFriends} mutual friend${if (request.mutualFriends == 1) "" else "s"}"
+    request.fromUserBio.isNotBlank() -> request.fromUserBio
+    else                             -> "Wants to be your friend"
 }
 
 @Composable

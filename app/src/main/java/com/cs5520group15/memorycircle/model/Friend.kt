@@ -34,7 +34,8 @@ data class FriendRequest(
     val fromUserName:   String,
     val fromUserEmail:  String,
     val mutualFriends:  Int,
-    val status:         Status = Status.PENDING
+    val status:         Status = Status.PENDING,
+    val fromUserBio:    String = ""
 ) {
     enum class Status { PENDING, ACCEPTED, DECLINED }
 }
