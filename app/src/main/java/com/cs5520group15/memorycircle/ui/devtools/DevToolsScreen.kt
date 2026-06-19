@@ -38,6 +38,12 @@ fun DevToolsScreen(
     val profilesState      by viewModel.profilesState.collectAsStateWithLifecycle()
     val clearProfilesState by viewModel.clearProfilesState.collectAsStateWithLifecycle()
     val acceptForU6State   by viewModel.acceptForU6State.collectAsStateWithLifecycle()
+    val simFriendReqState   by viewModel.simFriendReqState.collectAsStateWithLifecycle()
+    val simGroupInviteState by viewModel.simGroupInviteState.collectAsStateWithLifecycle()
+    val simJoinMyGroupState by viewModel.simJoinMyGroupState.collectAsStateWithLifecycle()
+    val simNewPostState     by viewModel.simNewPostState.collectAsStateWithLifecycle()
+    val simNewPhotoState    by viewModel.simNewPhotoState.collectAsStateWithLifecycle()
+    val simCommentState     by viewModel.simCommentState.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -117,6 +123,60 @@ fun DevToolsScreen(
                 buttonLabel = "Accept for Test User 6",
                 state       = acceptForU6State,
                 onRun       = { viewModel.acceptForU6() }
+            )
+
+            Text(
+                text  = "NOTIFICATION SIMULATIONS",
+                style = MaterialTheme.typography.labelSmall,
+                color = Ink
+            )
+
+            SeedSection(
+                title       = "1. Friend request from Test User 8",
+                description = "Writes an incoming-request doc on your inbox as if 8@test.com tapped Add on you. Triggers the friend-request notification on this device.",
+                buttonLabel = "Simulate friend request",
+                state       = simFriendReqState,
+                onRun       = { viewModel.simFriendRequestFromU8() }
+            )
+
+            SeedSection(
+                title       = "2. Test User 8 creates a group and adds you",
+                description = "Creates a sim group owned by 8@test.com with you as a member (idempotent — reuses the same sim group on re-tap). Triggers the group-invite notification, and seeds the group that the next three sims write into.",
+                buttonLabel = "Simulate group invite",
+                state       = simGroupInviteState,
+                onRun       = { viewModel.simGroupInviteFromU8() }
+            )
+
+            SeedSection(
+                title       = "3. Test User 10 joins your owned group",
+                description = "Adds 10@test.com to the memberIds of YOUR first owned group. Triggers the new-member notification (only fires for the owner — you).",
+                buttonLabel = "Simulate Test User 10 joining",
+                state       = simJoinMyGroupState,
+                onRun       = { viewModel.simU10JoinMyGroup() }
+            )
+
+            SeedSection(
+                title       = "4. Test User 8 posts in their sim group",
+                description = "Inserts a new post authored by 8@test.com into the current-month scrapbook of the sim group from step 2 (auto-creates the group if you skipped step 2). Triggers the new-post notification.",
+                buttonLabel = "Simulate new post",
+                state       = simNewPostState,
+                onRun       = { viewModel.simNewPostByU8() }
+            )
+
+            SeedSection(
+                title       = "5. Test User 8 adds a photo to their post",
+                description = "Appends a new photo to the latest post authored by 8@test.com in the sim group (auto-creates a post if none exists). Triggers the new-photo notification.",
+                buttonLabel = "Simulate new photo",
+                state       = simNewPhotoState,
+                onRun       = { viewModel.simNewPhotoByU8() }
+            )
+
+            SeedSection(
+                title       = "6. Test User 8 comments on their post",
+                description = "Adds a comment authored by 8@test.com on the latest post by 8@test.com in the sim group (auto-creates a post if none exists). Triggers the new-comment notification.",
+                buttonLabel = "Simulate new comment",
+                state       = simCommentState,
+                onRun       = { viewModel.simCommentByU8() }
             )
         }
     }

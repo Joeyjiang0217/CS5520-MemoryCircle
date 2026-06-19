@@ -390,6 +390,287 @@ object SeedRepository {
         return accepted
     }
 
+    // ── Notification simulation helpers ─────────────────────────────────────
+    //
+    // These six functions write the SAME Firestore documents a real user
+    // action would write, so the live NotificationsRepository listeners on
+    // the developer's device see them as genuine events and fire system
+    // notifications. They're idempotent where it makes sense (the "group
+    // invite" sim reuses an existing sim group instead of creating one
+    // per click) so repeated taps don't pollute the data set.
+
+    /**
+     * Writes an incoming friend-request doc into MY incomingRequests as if
+     * Test User N had tapped Add on me. Also creates the matching
+     * outgoingRequests entry on Test User N's side so the eventual accept
+     * flow works correctly. Triggers the friend-request notification.
+     */
+    suspend fun simulateFriendRequestFromTestUser(n: Int) {
+        val me        = AuthRepository.currentUid ?: error("Not logged in")
+        val senderName = "Test User $n"
+        val senderUid = lookupUidsByName(listOf(senderName))[senderName]
+            ?: error("$senderName not found — run 'Seed users' first")
+        if (senderUid == me) error("Can't simulate a request from yourself")
+
+        val brief = AuthRepository.getUserBriefs(listOf(senderUid))[senderUid]
+
+        val incomingRef = db.collection("users").document(me)
+            .collection("incomingRequests").document(senderUid)
+        val outgoingRef = db.collection("users").document(senderUid)
+            .collection("outgoingRequests").document(me)
+
+        db.runBatch { batch ->
+            batch.set(incomingRef, mapOf(
+                "uid"         to senderUid,
+                "name"        to (brief?.name ?: senderName),
+                "avatarUrl"   to (brief?.avatarUrl.orEmpty()),
+                "bio"         to (brief?.bio.orEmpty()),
+                "status"      to "PENDING",
+                "requestedAt" to FieldValue.serverTimestamp()
+            ))
+            batch.set(outgoingRef, mapOf(
+                "uid"         to me,
+                "requestedAt" to FieldValue.serverTimestamp()
+            ))
+        }.await()
+    }
+
+    /**
+     * Has Test User N create a group and add me to it. Idempotent — if a
+     * sim group with that owner + me as member already exists, reuses it
+     * instead of spawning a new one. Triggers the group-invite notification.
+     * Returns the group id (useful for the post / photo / comment sims).
+     */
+    suspend fun simulateGroupInviteFromTestUser(n: Int): String {
+        val me         = AuthRepository.currentUid ?: error("Not logged in")
+        val ownerName  = "Test User $n"
+        val ownerUid   = lookupUidsByName(listOf(ownerName))[ownerName]
+            ?: error("$ownerName not found — run 'Seed users' first")
+
+        // Reuse an existing sim group if there's already one owned by N
+        // with me as a member.
+        val existing = db.collection("groups")
+            .whereEqualTo("ownerId", ownerUid)
+            .get().await()
+            .documents.firstOrNull { doc ->
+                @Suppress("UNCHECKED_CAST")
+                val ids = (doc.get("memberIds") as? List<String>).orEmpty()
+                me in ids
+            }
+        if (existing != null) return existing.id
+
+        val groupRef = db.collection("groups").document()
+        val gid       = groupRef.id
+        val groupName = "$ownerName's Sim Group"
+        val members   = listOf(ownerUid, me)
+
+        groupRef.set(mapOf(
+            "groupId"     to gid,
+            "name"        to groupName,
+            "createdAt"   to FieldValue.serverTimestamp(),
+            "ownerId"     to ownerUid,
+            "memberIds"   to members,
+            "memberCount" to members.size,
+            "memoryCount" to 0
+        )).await()
+
+        val briefs = AuthRepository.getUserBriefs(members)
+        members.forEach { memberUid ->
+            val brief = briefs[memberUid]
+            groupRef.collection("members").document(memberUid).set(mapOf(
+                "uid"       to memberUid,
+                "name"      to (brief?.name.orEmpty()),
+                "avatarUrl" to (brief?.avatarUrl.orEmpty()),
+                "bio"       to (brief?.bio.orEmpty()),
+                "joinedAt"  to FieldValue.serverTimestamp()
+            )).await()
+        }
+
+        val scrapbookId = YearMonth.now().toString()
+        groupRef.collection("scrapbooks").document(scrapbookId).set(mapOf(
+            "scrapbookId" to scrapbookId,
+            "postCount"   to 0,
+            "createdAt"   to FieldValue.serverTimestamp(),
+            "updatedAt"   to FieldValue.serverTimestamp()
+        )).await()
+
+        return gid
+    }
+
+    /**
+     * Adds Test User N as a member of MY first owned group. Triggers the
+     * new-member notification on the owner (me).
+     */
+    suspend fun simulateUserJoiningMyGroup(n: Int) {
+        val me        = AuthRepository.currentUid ?: error("Not logged in")
+        val joinName  = "Test User $n"
+        val joinerUid = lookupUidsByName(listOf(joinName))[joinName]
+            ?: error("$joinName not found — run 'Seed users' first")
+        if (joinerUid == me) error("You can't join your own group as another user")
+
+        val ownedSnap = db.collection("groups")
+            .whereEqualTo("ownerId", me)
+            .limit(1)
+            .get().await()
+        val groupDoc = ownedSnap.documents.firstOrNull()
+            ?: error("You don't own any group — create one first")
+        val gid = groupDoc.id
+
+        @Suppress("UNCHECKED_CAST")
+        val currentMembers = (groupDoc.get("memberIds") as? List<String>).orEmpty()
+        if (joinerUid in currentMembers) error("$joinName is already in this group")
+
+        val groupRef = db.collection("groups").document(gid)
+        groupRef.update(mapOf(
+            "memberIds"   to FieldValue.arrayUnion(joinerUid),
+            "memberCount" to FieldValue.increment(1)
+        )).await()
+
+        val brief = AuthRepository.getUserBriefs(listOf(joinerUid))[joinerUid]
+        groupRef.collection("members").document(joinerUid).set(mapOf(
+            "uid"       to joinerUid,
+            "name"      to (brief?.name ?: joinName),
+            "avatarUrl" to (brief?.avatarUrl.orEmpty()),
+            "bio"       to (brief?.bio.orEmpty()),
+            "joinedAt"  to FieldValue.serverTimestamp()
+        )).await()
+    }
+
+    /**
+     * Inserts a new post authored by Test User N into the sim group from
+     * `simulateGroupInviteFromTestUser`. Auto-creates the sim group if it
+     * doesn't exist yet so the test sequence works in any order. Triggers
+     * the new-post notification.
+     */
+    suspend fun simulateNewPostByTestUser(n: Int) {
+        val gid       = ensureSimGroupWithTestUserAsOwner(n)
+        val authorUid = lookupUidsByName(listOf("Test User $n"))["Test User $n"]
+            ?: error("Test User $n not found")
+
+        val scrapbookId = YearMonth.now().toString()
+        val sbRef = db.collection("groups").document(gid)
+            .collection("scrapbooks").document(scrapbookId)
+        if (!sbRef.get().await().exists()) {
+            sbRef.set(mapOf(
+                "scrapbookId" to scrapbookId,
+                "postCount"   to 0,
+                "createdAt"   to FieldValue.serverTimestamp(),
+                "updatedAt"   to FieldValue.serverTimestamp()
+            )).await()
+        }
+
+        val postRef = sbRef.collection("posts").document()
+        val postId  = postRef.id
+        val today   = LocalDate.now()
+        val date    = Timestamp(today.atStartOfDay(ZoneId.systemDefault()).toEpochSecond(), 0)
+
+        postRef.set(mapOf(
+            "postId"       to postId,
+            "authorId"     to authorUid,
+            "title"        to "Post from Test User $n (sim)",
+            "date"         to date,
+            "tags"         to emptyList<String>(),
+            "photos"       to listOf(mapOf(
+                "photoId"     to UUID.randomUUID().toString(),
+                "url"         to "https://picsum.photos/seed/${postId}/600/400",
+                "storagePath" to "",
+                "description" to "Simulated post by Test User $n",
+                "uploaderId"  to authorUid,
+                "uploadedAt"  to Timestamp.now()
+            )),
+            "commentCount" to 0,
+            "createdAt"    to FieldValue.serverTimestamp()
+        )).await()
+
+        sbRef.update("postCount", FieldValue.increment(1)).await()
+        db.collection("groups").document(gid)
+            .update("memoryCount", FieldValue.increment(1)).await()
+    }
+
+    /**
+     * Appends a new photo entry to the latest post authored by Test User N
+     * in the sim group. Auto-runs the "new post" sim first if no post by
+     * N exists yet, so the user can run sims out of order. Triggers the
+     * new-photo notification.
+     */
+    suspend fun simulateNewPhotoByTestUser(n: Int) {
+        val gid       = ensureSimGroupWithTestUserAsOwner(n)
+        val authorUid = lookupUidsByName(listOf("Test User $n"))["Test User $n"]
+            ?: error("Test User $n not found")
+
+        val postRef = latestPostByAuthor(gid, authorUid) ?: run {
+            simulateNewPostByTestUser(n)
+            latestPostByAuthor(gid, authorUid)
+                ?: error("Could not find or create a post by Test User $n")
+        }
+
+        val snap = postRef.get().await()
+        @Suppress("UNCHECKED_CAST")
+        val photos = (snap.get("photos") as? List<Map<String, Any?>>).orEmpty()
+        val newPhoto = mapOf(
+            "photoId"     to UUID.randomUUID().toString(),
+            "url"         to "https://picsum.photos/seed/sim_${System.currentTimeMillis()}/600/400",
+            "storagePath" to "",
+            "description" to "Simulated new photo by Test User $n",
+            "uploaderId"  to authorUid,
+            "uploadedAt"  to Timestamp.now()
+        )
+        postRef.update("photos", photos + newPhoto).await()
+    }
+
+    /**
+     * Adds a comment authored by Test User N on the latest post they
+     * authored in the sim group. Auto-creates a post if none exists.
+     * Triggers the new-comment notification.
+     */
+    suspend fun simulateCommentByTestUser(n: Int) {
+        val gid       = ensureSimGroupWithTestUserAsOwner(n)
+        val authorUid = lookupUidsByName(listOf("Test User $n"))["Test User $n"]
+            ?: error("Test User $n not found")
+
+        val postRef = latestPostByAuthor(gid, authorUid) ?: run {
+            simulateNewPostByTestUser(n)
+            latestPostByAuthor(gid, authorUid)
+                ?: error("Could not find or create a post by Test User $n")
+        }
+
+        val commentRef = postRef.collection("comments").document()
+        commentRef.set(mapOf(
+            "commentId" to commentRef.id,
+            "authorId"  to authorUid,
+            "text"      to "Nice memory! (sim from Test User $n)",
+            "createdAt" to FieldValue.serverTimestamp()
+        )).await()
+        postRef.update("commentCount", FieldValue.increment(1)).await()
+    }
+
+    /**
+     * Returns the sim group's id, creating it via the "group invite" sim
+     * path if needed. Lets the post / photo / comment sims work in any
+     * order — they all share the same sim group per Test User.
+     */
+    private suspend fun ensureSimGroupWithTestUserAsOwner(n: Int): String =
+        simulateGroupInviteFromTestUser(n)
+
+    /**
+     * Returns the most-recent current-month post in `gid` whose authorId
+     * matches `authorUid`, or null if none exist yet.
+     */
+    private suspend fun latestPostByAuthor(gid: String, authorUid: String):
+            com.google.firebase.firestore.DocumentReference? {
+        val scrapbookId = YearMonth.now().toString()
+        val snap = db.collection("groups").document(gid)
+            .collection("scrapbooks").document(scrapbookId)
+            .collection("posts")
+            .whereEqualTo("authorId", authorUid)
+            .get().await()
+        if (snap.isEmpty) return null
+        val sorted = snap.documents.sortedByDescending {
+            it.getTimestamp("createdAt")?.seconds ?: 0L
+        }
+        return sorted.first().reference
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     /**

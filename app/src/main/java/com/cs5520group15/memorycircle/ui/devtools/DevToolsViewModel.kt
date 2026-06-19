@@ -34,6 +34,14 @@ class DevToolsViewModel : ViewModel() {
     private val _clearProfilesState = MutableStateFlow<ActionState>(ActionState.Idle)
     private val _acceptForU6State   = MutableStateFlow<ActionState>(ActionState.Idle)
 
+    // Notification simulations
+    private val _simFriendReqState     = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _simGroupInviteState   = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _simJoinMyGroupState   = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _simNewPostState       = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _simNewPhotoState      = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _simCommentState       = MutableStateFlow<ActionState>(ActionState.Idle)
+
     val usersState:         StateFlow<ActionState> = _usersState.asStateFlow()
     val postState:          StateFlow<ActionState> = _postState.asStateFlow()
     val historyState:       StateFlow<ActionState> = _historyState.asStateFlow()
@@ -41,6 +49,13 @@ class DevToolsViewModel : ViewModel() {
     val profilesState:      StateFlow<ActionState> = _profilesState.asStateFlow()
     val clearProfilesState: StateFlow<ActionState> = _clearProfilesState.asStateFlow()
     val acceptForU6State:   StateFlow<ActionState> = _acceptForU6State.asStateFlow()
+
+    val simFriendReqState:   StateFlow<ActionState> = _simFriendReqState.asStateFlow()
+    val simGroupInviteState: StateFlow<ActionState> = _simGroupInviteState.asStateFlow()
+    val simJoinMyGroupState: StateFlow<ActionState> = _simJoinMyGroupState.asStateFlow()
+    val simNewPostState:     StateFlow<ActionState> = _simNewPostState.asStateFlow()
+    val simNewPhotoState:    StateFlow<ActionState> = _simNewPhotoState.asStateFlow()
+    val simCommentState:     StateFlow<ActionState> = _simCommentState.asStateFlow()
 
     fun seedUsers(appContext: Context) = viewModelScope.launch {
         _usersState.value = ActionState.Running
@@ -121,6 +136,65 @@ class DevToolsViewModel : ViewModel() {
                     if (n == 0) ActionState.Success("No pending requests for Test User 6")
                     else ActionState.Success("Accepted $n request(s) for Test User 6")
                 },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    // ── Notification simulations ─────────────────────────────────────────────
+    // Each writes the same Firestore data a real user action would; the live
+    // NotificationsRepository listeners pick it up and fire system
+    // notifications. Verifies the full path end-to-end, not just the trigger.
+
+    fun simFriendRequestFromU8() = viewModelScope.launch {
+        _simFriendReqState.value = ActionState.Running
+        _simFriendReqState.value = runCatching { SeedRepository.simulateFriendRequestFromTestUser(8) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 8 sent you a friend request") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    fun simGroupInviteFromU8() = viewModelScope.launch {
+        _simGroupInviteState.value = ActionState.Running
+        _simGroupInviteState.value = runCatching { SeedRepository.simulateGroupInviteFromTestUser(8) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 8's sim group ready — you're a member") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    fun simU10JoinMyGroup() = viewModelScope.launch {
+        _simJoinMyGroupState.value = ActionState.Running
+        _simJoinMyGroupState.value = runCatching { SeedRepository.simulateUserJoiningMyGroup(10) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 10 joined your group") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    fun simNewPostByU8() = viewModelScope.launch {
+        _simNewPostState.value = ActionState.Running
+        _simNewPostState.value = runCatching { SeedRepository.simulateNewPostByTestUser(8) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 8 posted in their sim group") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    fun simNewPhotoByU8() = viewModelScope.launch {
+        _simNewPhotoState.value = ActionState.Running
+        _simNewPhotoState.value = runCatching { SeedRepository.simulateNewPhotoByTestUser(8) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 8 added a photo") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    fun simCommentByU8() = viewModelScope.launch {
+        _simCommentState.value = ActionState.Running
+        _simCommentState.value = runCatching { SeedRepository.simulateCommentByTestUser(8) }
+            .fold(
+                onSuccess = { ActionState.Success("Test User 8 commented on their post") },
                 onFailure = { ActionState.Error(it.message ?: "Unknown error") }
             )
     }
