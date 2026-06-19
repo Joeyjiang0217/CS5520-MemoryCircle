@@ -48,14 +48,24 @@ fun SettingsRow(
     modifier:        Modifier = Modifier,
     value:           String? = null,
     valuePlaceholder: Boolean = false,
-    leadingIconRes:  Int? = null
+    leadingIconRes:  Int? = null,
+    enabled:         Boolean = true
 ) {
+    val labelColor = if (enabled) Ink else InkTertiary
+    val valueColor = when {
+        !enabled         -> InkTertiary
+        valuePlaceholder -> InkTertiary
+        else             -> InkSecondary
+    }
+
+    val rowModifier = modifier
+        .fillMaxWidth()
+        .let { if (enabled) it.clickable { onClick() } else it }
+        .padding(vertical = 14.dp)
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 14.dp)
+        modifier          = rowModifier
     ) {
         if (leadingIconRes != null) {
             Box(
@@ -68,7 +78,7 @@ fun SettingsRow(
                 Icon(
                     painter            = painterResource(leadingIconRes),
                     contentDescription = null,
-                    tint               = Brown,
+                    tint               = if (enabled) Brown else InkTertiary,
                     modifier           = Modifier.size(20.dp)
                 )
             }
@@ -77,7 +87,7 @@ fun SettingsRow(
         Text(
             text  = label,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-            color = Ink,
+            color = labelColor,
             modifier = if (value == null) Modifier.weight(1f) else Modifier
         )
         if (value != null) {
@@ -85,7 +95,7 @@ fun SettingsRow(
             Text(
                 text     = value,
                 style    = MaterialTheme.typography.bodyLarge,
-                color    = if (valuePlaceholder) InkTertiary else InkSecondary,
+                color    = valueColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -93,7 +103,9 @@ fun SettingsRow(
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
-        Chevron()
+        // Drop the chevron when the row isn't navigable — keeps the visual
+        // promise of "tap to edit" honest.
+        if (enabled) Chevron()
     }
 }
 

@@ -156,10 +156,11 @@ fun GroupDetailScreen(
 
             items(months, key = { it.id }) { month ->
                 MonthScrapbookRow(
-                    title       = "${month.month} ${month.year}",
-                    memoryCount = month.memoryCount,
-                    colorType   = month.colorType,
-                    onClick     = { onOpenScrapbook(groupId, month.month, month.year) }
+                    title        = "${month.month} ${month.year}",
+                    memoryCount  = month.memoryCount,
+                    colorType    = month.colorType,
+                    thumbnailUrl = month.thumbnailUrl,
+                    onClick      = { onOpenScrapbook(groupId, month.month, month.year) }
                 )
             }
         }
@@ -400,7 +401,7 @@ private fun MemberThumbnail(
             .padding(vertical = 4.dp)
     ) {
         Box {
-            AvatarCircle(name = member.name, size = 48.dp)
+            AvatarCircle(name = member.name, size = 48.dp, photoUrl = member.avatarUrl)
             if (member.isOnline) {
                 Box(
                     modifier = Modifier

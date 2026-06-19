@@ -8,8 +8,14 @@ import com.cs5520group15.memorycircle.data.ProfileRepository
  *       AvatarViewerScreen. The landing-tab screen never mutates the profile;
  *       all edits are routed through EditProfileViewModel.
  * Who: Used by ProfileScreen and AvatarViewerScreen.
- * When: Created on first composition; survives config changes.
+ * When: Created on first composition; survives config changes. The init block
+ *       triggers ProfileRepository.bind() so the Firestore listener attaches
+ *       even if the user lands directly on ProfileScreen without going through
+ *       EditProfile first.
  */
 class ProfileViewModel : ViewModel() {
+
+    init { ProfileRepository.bind() }
+
     val profile = ProfileRepository.profile
 }

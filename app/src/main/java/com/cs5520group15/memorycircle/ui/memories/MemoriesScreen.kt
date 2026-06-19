@@ -122,10 +122,11 @@ private fun MonthSection(
         // Scrapbooks generated for this month (one per group)
         section.scrapbooks.forEach { scrapbook ->
             MonthScrapbookRow(
-                title       = scrapbook.groupName,
-                memoryCount = scrapbook.memoryCount,
-                colorType   = scrapbook.colorType,
-                onClick     = { onOpenScrapbook(scrapbook) }
+                title        = scrapbook.groupName,
+                memoryCount  = scrapbook.memoryCount,
+                colorType    = scrapbook.colorType,
+                thumbnailUrl = scrapbook.thumbnailUrl,
+                onClick      = { onOpenScrapbook(scrapbook) }
             )
         }
     }

@@ -58,8 +58,9 @@ fun EditProfileScreen(
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
             AvatarRow(
-                name    = profile.name,
-                onClick = onOpenAvatarViewer
+                name      = profile.name,
+                photoUrl  = profile.avatarUrl,
+                onClick   = onOpenAvatarViewer
             )
             RowDivider()
 
@@ -78,10 +79,16 @@ fun EditProfileScreen(
             )
             RowDivider()
 
+            // Email is read-only for now — Firebase Auth requires a
+            // re-authentication + verification flow to change the login email,
+            // and we don't have email-verification configured on the project
+            // yet. Rendering the row in grey so the user sees their address
+            // without expecting a tap-to-edit affordance.
             SettingsRow(
                 label   = "Email",
                 value   = profile.email,
-                onClick = { editingField = EditField.EMAIL }
+                enabled = false,
+                onClick = {}
             )
             RowDivider()
         }
@@ -127,8 +134,9 @@ private enum class EditField(val label: String, val singleLine: Boolean) {
  */
 @Composable
 private fun AvatarRow(
-    name:    String,
-    onClick: () -> Unit
+    name:     String,
+    photoUrl: String,
+    onClick:  () -> Unit
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -143,7 +151,7 @@ private fun AvatarRow(
             color = Ink,
             modifier = Modifier.weight(1f)
         )
-        AvatarCircle(name = name, size = 44.dp)
+        AvatarCircle(name = name, size = 44.dp, photoUrl = photoUrl)
         Spacer(modifier = Modifier.width(8.dp))
         Chevron()
     }

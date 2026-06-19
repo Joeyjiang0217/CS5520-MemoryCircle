@@ -1,5 +1,8 @@
 package com.cs5520group15.memorycircle.ui.avatarviewer
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,19 +18,21 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.data.ProfileRepository
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.profile.ProfileViewModel
 import com.cs5520group15.memorycircle.ui.theme.*
+import kotlinx.coroutines.launch
 
 /**
  * What: Full-size avatar viewer reached by tapping the avatar row on
  *       EditProfile. Top bar carries a back button and an "more" icon on the
  *       right; tapping the icon surfaces an action menu (pick from album /
- *       save image / cancel). Album-pick and save-image are placeholder
- *       callbacks for now — the actual photo-picker / file-write wiring
- *       lands when the profile picture moves from a letter avatar to a real
- *       URI-backed image.
+ *       cancel). Picking an image launches the system PhotoPicker, then
+ *       ProfileRepository uploads the result to Firebase Storage and patches
+ *       users/{uid}.avatarUrl — the live profile listener pushes the new URL
+ *       back to every screen showing this user's avatar.
  * Who: Called by MemoryCircleNavigation for the AvatarViewer route.
  * When: Reached from the Avatar row on EditProfileScreen.
  */
@@ -39,9 +44,33 @@ fun AvatarViewerScreen(
     val profile by viewModel.profile.collectAsStateWithLifecycle()
 
     var showActions by remember { mutableStateOf(false) }
+    var uploading   by remember { mutableStateOf(false) }
+    var errorText   by remember { mutableStateOf<String?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // System PhotoPicker — no extra runtime permission needed on Android 13+.
+    val pickMedia = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        uploading = true
+        errorText = null
+        scope.launch {
+            runCatching { ProfileRepository.uploadAvatar(uri.toString()) }
+                .onFailure { errorText = it.message ?: "Upload failed" }
+            uploading = false
+        }
+    }
+
+    LaunchedEffect(errorText) {
+        errorText?.let { snackbarHostState.showSnackbar(it) }
+    }
 
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         topBar = {
             MemoryCircleTopBar(
                 title    = "Profile Picture",
@@ -65,24 +94,24 @@ fun AvatarViewerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Letter avatar blown up. Once a real avatar URI is in profile,
-            // swap this for an AsyncImage anchored to that URI.
-            AvatarCircle(name = profile.name, size = 240.dp)
+            AvatarCircle(
+                name     = profile.name,
+                size     = 240.dp,
+                photoUrl = profile.avatarUrl
+            )
+            if (uploading) {
+                CircularProgressIndicator(color = Brown)
+            }
         }
     }
 
     if (showActions) {
         AvatarActionMenu(
             onPickFromAlbum = {
-                // TODO: launch ActivityResultContracts.PickVisualMedia and
-                //       commit the resulting URI to ProfileRepository.
                 showActions = false
-            },
-            onSaveImage = {
-                // TODO: render the avatar to a Bitmap and persist it via
-                //       MediaStore. Letter avatar is purely decorative for
-                //       now, so this is a no-op until a real image lands.
-                showActions = false
+                pickMedia.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             },
             onCancel = { showActions = false }
         )
@@ -90,16 +119,18 @@ fun AvatarViewerScreen(
 }
 
 /**
- * What: Three-item action menu rendered as a centred Dialog (stacked rows
- *       separated by Beige dividers) rather than a ModalBottomSheet to keep
- *       the look tied to the brand's Cream + serif palette.
+ * What: Action menu rendered as a centred Dialog (stacked rows separated by
+ *       Beige dividers) rather than a ModalBottomSheet to keep the look tied
+ *       to the brand's Cream + serif palette. "Save image" has been dropped
+ *       since the avatar lives in Firestore now — there's nothing local to
+ *       export until we ever ship a "save the bytes of this remote image"
+ *       feature.
  * Who: Called by AvatarViewerScreen when the more-options icon is tapped.
  * When: Visible while showActions is true on the parent.
  */
 @Composable
 private fun AvatarActionMenu(
     onPickFromAlbum: () -> Unit,
-    onSaveImage:     () -> Unit,
     onCancel:        () -> Unit
 ) {
     Dialog(onDismissRequest = onCancel) {
@@ -110,19 +141,11 @@ private fun AvatarActionMenu(
         ) {
             ActionRow(label = "Choose from album", onClick = onPickFromAlbum)
             HorizontalDivider(color = Beige.copy(alpha = 0.5f))
-            ActionRow(label = "Save image",        onClick = onSaveImage)
-            HorizontalDivider(color = Beige.copy(alpha = 0.5f))
             ActionRow(label = "Cancel",            onClick = onCancel, emphasis = true)
         }
     }
 }
 
-/**
- * What: One action row in the avatar menu. Cancel is rendered with Brown
- *       emphasis so the user sees the dismiss option clearly.
- * Who: Called by AvatarActionMenu.
- * When: Rendered for each action.
- */
 @Composable
 private fun ActionRow(
     label:    String,

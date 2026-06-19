@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.data.FirebaseModule
+import com.cs5520group15.memorycircle.data.ProfileRepository
 import com.cs5520group15.memorycircle.data.Result
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,10 +39,16 @@ class HomeViewModel : ViewModel() {
     val groups:   StateFlow<List<Group>> = _groups.asStateFlow()
     val userName: StateFlow<String>      = _userName.asStateFlow()
 
+    /** Live avatar URL from the shared ProfileRepository — empty when the user
+     *  has never uploaded a picture. Shared with Profile / EditProfile screens
+     *  so an avatar uploaded from those flows shows here without a reload. */
+    val profile = ProfileRepository.profile
+
     /** Active Firestore listener — detached in onCleared() to avoid leaks. */
     private var groupsListener: ListenerRegistration? = null
 
     init {
+        ProfileRepository.bind()
         loadGroups()
         loadUserName()
     }

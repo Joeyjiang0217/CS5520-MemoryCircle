@@ -193,7 +193,11 @@ private fun HistoryMemoryCard(
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 entry.photos.forEach { photo ->
-                    HistoryPhotoBlock(photo = photo, authorName = entry.authorName)
+                    HistoryPhotoBlock(
+                        photo             = photo,
+                        fallbackName      = entry.authorName,
+                        fallbackAvatarUrl = entry.authorAvatarUrl
+                    )
                 }
             }
 
@@ -218,11 +222,14 @@ private fun HistoryMemoryCard(
 }
 
 @Composable
-private fun HistoryPhotoBlock(photo: Photo, authorName: String) {
+private fun HistoryPhotoBlock(photo: Photo, fallbackName: String, fallbackAvatarUrl: String) {
+    val displayName   = photo.uploaderName.ifBlank { fallbackName }
+    val displayAvatar = photo.uploaderAvatarUrl.ifBlank { fallbackAvatarUrl }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AsyncImage(
             model              = photo.url,
-            contentDescription = "$authorName's photo",
+            contentDescription = "$displayName's photo",
             contentScale       = ContentScale.Crop,
             modifier           = Modifier
                 .fillMaxWidth()
@@ -230,11 +237,11 @@ private fun HistoryPhotoBlock(photo: Photo, authorName: String) {
                 .clip(RoundedCornerShape(8.dp))
         )
         Row(verticalAlignment = Alignment.Top) {
-            AvatarCircle(name = authorName, size = 28.dp)
+            AvatarCircle(name = displayName, size = 28.dp, photoUrl = displayAvatar)
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text  = authorName,
+                    text  = displayName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Brown
                 )

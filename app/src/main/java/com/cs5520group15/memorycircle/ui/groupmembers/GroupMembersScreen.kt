@@ -77,6 +77,7 @@ fun GroupMembersScreen(
                         subtitle   = "${member.sharedMemories} shared memories",
                         isOnline   = member.isOnline,
                         avatarSize = 48.dp,
+                        photoUrl   = member.avatarUrl,
                         onClick    = { onOpenMemberProfile(member.id) }
                     )
                     HorizontalDivider(color = Beige.copy(alpha = 0.5f))

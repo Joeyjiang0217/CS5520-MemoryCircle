@@ -2,16 +2,19 @@ package com.cs5520group15.memorycircle.model
 
 /**
  * What: One person who belongs to a memory group. Drives the row shown on the
- *       group-members screen (avatar initial + name + shared-memories count).
- *       Kept flat for now — no roles/admin concept until the project actually
- *       needs admin-only actions like "remove member" or transferring ownership.
- * Who: Used by GroupMembersViewModel and GroupMembersScreen.
- * When: Instantiated when loading a group's roster; Firestore will replace the
- *       mock source in a later phase.
+ *       group-members screen (avatar + name + shared-memories count).
+ *       Kept flat — no roles/admin concept until the project actually needs
+ *       admin-only actions like "remove member" or transferring ownership.
+ *       avatarUrl is the Firebase Storage download URL for the user's profile
+ *       picture; blank means the row should fall back to the letter avatar.
+ * Who: Used by GroupDetailViewModel / GroupMembersViewModel and their screens.
+ * When: Instantiated whenever a group's roster is rebuilt from memberIds +
+ *       AuthRepository.getUserBriefs.
  */
 data class Member(
     val id:             String,
     val name:           String,
     val sharedMemories: Int,
-    val isOnline:       Boolean = false
+    val isOnline:       Boolean = false,
+    val avatarUrl:      String  = ""
 )

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -39,13 +40,17 @@ class GroupDetailViewModel : ViewModel() {
     /**
      * One scrapbook bucket for this group within a single month. `id` is the
      * Firestore doc id ("YYYY-MM"); `month`/`year` are display-formatted from it.
+     * `thumbnailUrl` is the download URL of the latest post's first photo, or
+     * "" when the scrapbook has no posts (the row falls back to the solid
+     * color chip).
      */
     data class MonthScrapbook(
-        val id:          String,
-        val month:       String,   // "January"
-        val year:        String,   // "2025"
-        val memoryCount: Int,
-        val colorType:   String    // "brown" or "sage"
+        val id:           String,
+        val month:        String,   // "January"
+        val year:         String,   // "2025"
+        val memoryCount:  Int,
+        val colorType:    String,   // "brown" or "sage"
+        val thumbnailUrl: String = ""
     )
 
     private val _groupName = MutableStateFlow("")
@@ -66,6 +71,14 @@ class GroupDetailViewModel : ViewModel() {
     private var scrapbooksListener: ListenerRegistration? = null
 
     private val monthFormatter = DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)
+
+    /**
+     * scrapbookDocId -> (postCount, thumbnailUrl). Cache invalidates when
+     * postCount changes — i.e. when a new post is added, the next snapshot
+     * fires and we'll re-query for the (possibly) new latest photo.
+     * Same shape as MemoriesViewModel's thumbnail cache.
+     */
+    private val thumbnailCache = mutableMapOf<String, Pair<Long, String>>()
 
     fun bind(groupId: String) {
         if (boundGroupId == groupId) return
@@ -89,35 +102,82 @@ class GroupDetailViewModel : ViewModel() {
             @Suppress("UNCHECKED_CAST")
             val uids = (snap.get("memberIds") as? List<String>) ?: emptyList()
             viewModelScope.launch {
-                val nameMap = AuthRepository.getUserNames(uids)
+                val briefs = AuthRepository.getUserBriefs(uids)
                 _members.value = uids.map { uid ->
+                    val brief = briefs[uid]
                     Member(
                         id             = uid,
-                        name           = nameMap[uid] ?: "Member",
+                        name           = brief?.name ?: "Member",
                         sharedMemories = 0,
-                        isOnline       = false
+                        isOnline       = false,
+                        avatarUrl      = brief?.avatarUrl.orEmpty()
                     )
                 }
             }
         }
 
         // 2) Scrapbooks subcollection — newest month first (doc id "YYYY-MM").
+        //    Each snapshot is republished twice: once immediately with whatever
+        //    thumbnails are already cached, then again after we've resolved any
+        //    missing / stale thumbnails (mirrors MemoriesViewModel.rebuild()).
         scrapbooksListener = groupRef.collection("scrapbooks")
             .orderBy(com.google.firebase.firestore.FieldPath.documentId(), Query.Direction.DESCENDING)
             .addSnapshotListener { snap, err ->
                 if (err != null || snap == null) return@addSnapshotListener
-                _months.value = snap.documents.mapNotNull { doc ->
-                    val id = doc.id
-                    val parsed = runCatching { YearMonth.parse(id) }.getOrNull() ?: return@mapNotNull null
-                    MonthScrapbook(
-                        id          = id,
-                        month       = parsed.format(monthFormatter),
-                        year        = parsed.year.toString(),
-                        memoryCount = (doc.getLong("postCount") ?: 0L).toInt(),
-                        colorType   = colorType
-                    )
+
+                fun publish() {
+                    _months.value = snap.documents.mapNotNull { doc ->
+                        val id     = doc.id
+                        val parsed = runCatching { YearMonth.parse(id) }.getOrNull() ?: return@mapNotNull null
+                        MonthScrapbook(
+                            id           = id,
+                            month        = parsed.format(monthFormatter),
+                            year         = parsed.year.toString(),
+                            memoryCount  = (doc.getLong("postCount") ?: 0L).toInt(),
+                            colorType    = colorType,
+                            thumbnailUrl = thumbnailCache[id]?.second.orEmpty()
+                        )
+                    }
+                }
+
+                publish()   // first pass — show cached thumbnails immediately
+
+                viewModelScope.launch {
+                    var changed = false
+                    snap.documents.forEach { doc ->
+                        val id        = doc.id
+                        val postCount = doc.getLong("postCount") ?: 0L
+                        val cached    = thumbnailCache[id]
+                        if (cached == null || cached.first != postCount) {
+                            val url = fetchLatestPostThumbnail(boundGroupId!!, id)
+                            thumbnailCache[id] = postCount to url
+                            if (url != cached?.second) changed = true
+                        }
+                    }
+                    if (changed) publish()
                 }
             }
+    }
+
+    /**
+     * Returns the download URL of the first photo of the most recent post in
+     * the given scrapbook, or "" if it has none. Defensive: any Firestore
+     * failure resolves to "" so the row just keeps showing the solid-color
+     * fallback instead of crashing the listener.
+     */
+    private suspend fun fetchLatestPostThumbnail(groupId: String, sbId: String): String {
+        return runCatching {
+            val postSnap = FirebaseModule.db.collection("groups").document(groupId)
+                .collection("scrapbooks").document(sbId)
+                .collection("posts")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(1)
+                .get().await()
+            val post = postSnap.documents.firstOrNull() ?: return@runCatching ""
+            val photos = post.get("photos") as? List<*>
+            val first = photos?.firstOrNull() as? Map<*, *>
+            (first?.get("url") as? String).orEmpty()
+        }.getOrDefault("")
     }
 
     /**

@@ -59,7 +59,11 @@ fun ProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(40.dp))
 
-            AvatarCircle(name = profile.name, size = 120.dp)
+            AvatarCircle(
+                name     = profile.name,
+                size     = 120.dp,
+                photoUrl = profile.avatarUrl
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -71,15 +75,15 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (profile.bio.isNotBlank()) {
-                Text(
-                    text      = profile.bio,
-                    style     = MaterialTheme.typography.bodyMedium,
-                    color     = InkSecondary,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-            }
+            // Bio is optional. Show a soft placeholder for brand-new users so
+            // the layout doesn't visually collapse the moment they sign up.
+            Text(
+                text      = profile.bio.ifBlank { "Tap Edit Profile to add a bio." },
+                style     = MaterialTheme.typography.bodyMedium,
+                color     = if (profile.bio.isBlank()) InkTertiary else InkSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text      = "✦ ${profile.email}",

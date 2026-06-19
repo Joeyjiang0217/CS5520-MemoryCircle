@@ -48,6 +48,7 @@ fun AvatarListRow(
     isOnline:      Boolean = false,
     avatarSize:    Dp = 44.dp,
     rowVerticalPadding: Dp = 10.dp,
+    photoUrl:      String? = null,
     trailing:      @Composable RowScope.() -> Unit = {}
 ) {
     Row(
@@ -58,7 +59,7 @@ fun AvatarListRow(
             .padding(vertical = rowVerticalPadding)
     ) {
         Box {
-            AvatarCircle(name = name, size = avatarSize)
+            AvatarCircle(name = name, size = avatarSize, photoUrl = photoUrl)
             if (isOnline) {
                 Box(
                     modifier = Modifier

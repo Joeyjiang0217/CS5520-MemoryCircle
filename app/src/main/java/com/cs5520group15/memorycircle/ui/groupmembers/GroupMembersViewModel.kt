@@ -49,13 +49,15 @@ class GroupMembersViewModel : ViewModel() {
             @Suppress("UNCHECKED_CAST")
             val uids = (snap.get("memberIds") as? List<String>) ?: emptyList()
             viewModelScope.launch {
-                val nameMap = AuthRepository.getUserNames(uids)
+                val briefs = AuthRepository.getUserBriefs(uids)
                 _members.value = uids.map { uid ->
+                    val brief = briefs[uid]
                     Member(
                         id             = uid,
-                        name           = nameMap[uid] ?: "Member",
+                        name           = brief?.name ?: "Member",
                         sharedMemories = 0,
-                        isOnline       = false
+                        isOnline       = false,
+                        avatarUrl      = brief?.avatarUrl.orEmpty()
                     )
                 }
             }

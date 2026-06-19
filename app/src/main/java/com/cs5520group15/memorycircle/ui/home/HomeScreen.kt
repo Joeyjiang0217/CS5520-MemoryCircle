@@ -34,6 +34,7 @@ fun HomeScreen(
 ) {
     val groups   by viewModel.groups.collectAsStateWithLifecycle()
     val userName by viewModel.userName.collectAsStateWithLifecycle()
+    val profile  by viewModel.profile.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -85,7 +86,7 @@ fun HomeScreen(
                         Text("✦", color = Ink)
                     }
                 }
-                AvatarCircle(name = userName, size = 44.dp)
+                AvatarCircle(name = userName, size = 44.dp, photoUrl = profile.avatarUrl)
             }
 
             Spacer(modifier = Modifier.height(32.dp))

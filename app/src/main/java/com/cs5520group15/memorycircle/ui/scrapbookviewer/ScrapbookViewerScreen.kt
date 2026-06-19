@@ -264,7 +264,7 @@ private fun MemoryCard(
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 entry.photos.forEach { photo ->
-                    PhotoBlock(photo = photo, authorName = entry.authorName)
+                    PhotoBlock(photo = photo, fallbackName = entry.authorName, fallbackAvatarUrl = entry.authorAvatarUrl)
                 }
             }
 
@@ -328,11 +328,17 @@ private fun MemoryCard(
 }
 
 @Composable
-private fun PhotoBlock(photo: Photo, authorName: String) {
+private fun PhotoBlock(photo: Photo, fallbackName: String, fallbackAvatarUrl: String) {
+    // Each photo carries its own uploader (a member that joined the post adds a
+    // distinct row). Fall back to the post's author when the photo predates the
+    // per-photo uploader resolution.
+    val displayName   = photo.uploaderName.ifBlank { fallbackName }
+    val displayAvatar = photo.uploaderAvatarUrl.ifBlank { fallbackAvatarUrl }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AsyncImage(
             model              = photo.url,
-            contentDescription = "$authorName's photo",
+            contentDescription = "$displayName's photo",
             contentScale       = ContentScale.Crop,
             modifier           = Modifier
                 .fillMaxWidth()
@@ -340,11 +346,11 @@ private fun PhotoBlock(photo: Photo, authorName: String) {
                 .clip(RoundedCornerShape(8.dp))
         )
         Row(verticalAlignment = Alignment.Top) {
-            AvatarCircle(name = authorName, size = 28.dp)
+            AvatarCircle(name = displayName, size = 28.dp, photoUrl = displayAvatar)
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    text  = authorName,
+                    text  = displayName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Brown
                 )

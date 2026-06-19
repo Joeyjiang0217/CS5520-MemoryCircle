@@ -85,12 +85,21 @@ object AuthRepository {
     // ── Profile name lookup ──────────────────────────────────────────────────
 
     /**
-     * Process-wide cache of uid -> display name. Avoids re-reading users/{uid}
-     * every time we need to render a post's authorName or a comment's authorName.
-     * Cleared automatically when the process dies; renames during a session will
-     * surface lazily as new lookups happen.
+     * What: A user's render-time identity — display name and avatar download
+     *       URL — surfaced together so callers (group members list, post
+     *       author rows, comment rows) get both fields in one Firestore round
+     *       trip instead of querying for them separately.
      */
-    private val nameCache = mutableMapOf<String, String>()
+    data class UserBrief(val name: String, val avatarUrl: String)
+
+    /**
+     * Process-wide cache of uid -> (name, avatarUrl). Avoids re-reading
+     * users/{uid} every time we need to render an author / member row.
+     * Cleared automatically when the process dies; renames or avatar uploads
+     * during a session surface lazily as new lookups happen — the editor's own
+     * profile updates instantly via ProfileRepository's live listener.
+     */
+    private val briefCache = mutableMapOf<String, UserBrief>()
 
     /**
      * Reads the current user's display name from Firestore.
@@ -107,17 +116,21 @@ object AuthRepository {
     }
 
     /**
-     * What: Single-uid display-name lookup. Hits the in-memory cache first; on
-     *       miss reads `users/{uid}.name` and caches the result.
-     * Who:  Used by the scrapbook layer to enrich post/comment authorIds with
-     *       display names at render time.
+     * What: Single-uid display-name lookup. Hits the in-memory brief cache
+     *       first; on miss reads users/{uid} (both name + avatarUrl in one
+     *       round trip) and caches the result.
+     * Who:  Used wherever only the name is needed (HomeScreen greeting,
+     *       CreateGroup owner member subdoc seed).
      */
     suspend fun getUserName(uid: String): String? {
-        nameCache[uid]?.let { return it }
+        briefCache[uid]?.let { return it.name }
         return try {
             val doc = db.collection("users").document(uid).get().await()
-            val name = doc.getString("name")
-            if (name != null) nameCache[uid] = name
+            val name = doc.getString("name") ?: return null
+            briefCache[uid] = UserBrief(
+                name      = name,
+                avatarUrl = doc.getString("avatarUrl").orEmpty()
+            )
             name
         } catch (e: Exception) {
             null
@@ -125,21 +138,33 @@ object AuthRepository {
     }
 
     /**
-     * What: Batched display-name lookup. Returns a map uid -> name covering
-     *       every input id; missing/unknown ids are absent from the map.
-     *       Uncached ids are fetched in chunks of 30 (Firestore's whereIn
-     *       limit) via `whereIn(documentId(), …)` and added to the cache.
-     * Who:  Used by ScrapbookRepository.assemble() so a timeline of N posts
-     *       costs at most ceil(uniqueAuthors / 30) Firestore round-trips
-     *       instead of N individual reads.
+     * Batched display-name lookup. Thin projection over [getUserBriefs] — same
+     * Firestore round trip, just drops the avatar field. Existing callers
+     * (ScrapbookRepository.assemble, etc.) keep their signature.
      */
-    suspend fun getUserNames(uids: List<String>): Map<String, String> {
+    suspend fun getUserNames(uids: List<String>): Map<String, String> =
+        getUserBriefs(uids).mapValues { it.value.name }
+
+    /**
+     * What: Batched (uid → name + avatarUrl) lookup. Returns a map covering
+     *       every input id whose users doc exists; missing/unknown ids are
+     *       absent. Uncached ids are fetched in chunks of 30 (Firestore's
+     *       whereIn limit) via whereIn(documentId(), …) and added to the
+     *       cache.
+     * Who:  Used by GroupDetailViewModel / GroupMembersViewModel to render
+     *       member avatars, and by ScrapbookRepository.assemble() to attach
+     *       avatars to post / comment / photo authors at read time.
+     * When: One call per snapshot refresh on the consumer; the cache absorbs
+     *       repeated lookups so a timeline of N posts costs at most
+     *       ceil(uniqueAuthors / 30) round trips.
+     */
+    suspend fun getUserBriefs(uids: List<String>): Map<String, UserBrief> {
         val unique = uids.toSet()
-        val result = mutableMapOf<String, String>()
+        val result = mutableMapOf<String, UserBrief>()
         val missing = mutableListOf<String>()
 
         unique.forEach { uid ->
-            val cached = nameCache[uid]
+            val cached = briefCache[uid]
             if (cached != null) result[uid] = cached else missing += uid
         }
 
@@ -152,11 +177,15 @@ object AuthRepository {
                     .get().await()
                 snap.documents.forEach { doc ->
                     val name = doc.getString("name") ?: return@forEach
-                    nameCache[doc.id] = name
-                    result[doc.id] = name
+                    val brief = UserBrief(
+                        name      = name,
+                        avatarUrl = doc.getString("avatarUrl").orEmpty()
+                    )
+                    briefCache[doc.id] = brief
+                    result[doc.id] = brief
                 }
             } catch (_: Exception) {
-                // Best-effort: missing names just don't appear in the result map.
+                // Best-effort: missing entries simply don't appear in the map.
             }
         }
         return result

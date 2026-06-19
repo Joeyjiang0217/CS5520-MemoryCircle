@@ -95,28 +95,31 @@ object ScrapbookRepository {
 
     /**
      * Builds the ScrapbookEntry list for a set of post documents. Fetches each
-     * post's comments subcollection AND batch-resolves every unique authorId
-     * (across posts + comments) into a display name via AuthRepository.
+     * post's comments subcollection AND batch-resolves every unique uid that
+     * appears as a post author, photo uploader, or comment author into a
+     * (name, avatarUrl) brief via AuthRepository.getUserBriefs — so a single
+     * Firestore round trip covers display data for every author shown in the
+     * timeline.
      */
     private suspend fun assemble(postDocs: List<DocumentSnapshot>): List<ScrapbookEntry> {
-        // First pass: load comments for every post, collect every unique authorId.
+        // First pass: load comments for every post, collect every unique uid
+        // that will need a name + avatar at render time.
         data class Raw(
             val doc: DocumentSnapshot,
-            val photos: List<Photo>,
-            val rawComments: List<Pair<String /*commentId*/, Map<String, Any?>>>,
-            val commentAuthorIds: List<String>
+            val rawPhotos: List<Map<String, Any?>>,
+            val rawComments: List<Pair<String /*commentId*/, Map<String, Any?>>>
         )
 
         val raws = postDocs.map { doc ->
-            val photos = (doc.get("photos") as? List<*>).orEmpty()
+            val rawPhotos = (doc.get("photos") as? List<*>).orEmpty()
                 .filterIsInstance<Map<*, *>>()
                 .map { m ->
-                    Photo(
-                        photoId     = m["photoId"] as? String ?: "",
-                        url         = m["url"] as? String ?: "",
-                        storagePath = m["storagePath"] as? String ?: "",
-                        description = m["description"] as? String ?: "",
-                        uploaderId  = m["uploaderId"] as? String ?: ""
+                    mapOf<String, Any?>(
+                        "photoId"     to (m["photoId"] as? String ?: ""),
+                        "url"         to (m["url"] as? String ?: ""),
+                        "storagePath" to (m["storagePath"] as? String ?: ""),
+                        "description" to (m["description"] as? String ?: ""),
+                        "uploaderId"  to (m["uploaderId"] as? String ?: "")
                     )
                 }
 
@@ -129,46 +132,64 @@ object ScrapbookRepository {
                     "text"     to (cm.getString("text") ?: "")
                 )
             }
-            val commentAuthorIds = rawComments.mapNotNull { (_, m) -> m["authorId"] as? String }
-                .filter { it.isNotBlank() }
 
-            Raw(doc, photos, rawComments, commentAuthorIds)
+            Raw(doc, rawPhotos, rawComments)
         }
 
-        val allAuthorIds = (
-            raws.mapNotNull { it.doc.getString("authorId") } +
-            raws.flatMap { it.commentAuthorIds }
-        ).filter { it.isNotBlank() }.distinct()
+        val allUids = buildList {
+            raws.forEach { r ->
+                r.doc.getString("authorId")?.let { add(it) }
+                r.rawPhotos.forEach   { (it["uploaderId"] as? String)?.let { uid -> add(uid) } }
+                r.rawComments.forEach { (_, m) -> (m["authorId"] as? String)?.let { uid -> add(uid) } }
+            }
+        }.filter { it.isNotBlank() }.distinct()
 
-        val nameMap = AuthRepository.getUserNames(allAuthorIds)
+        val briefs = AuthRepository.getUserBriefs(allUids)
 
-        // Second pass: assemble final ScrapbookEntry with names filled in.
-        return raws.map { (doc, photos, rawComments, _) ->
-            val authorId   = doc.getString("authorId") ?: ""
-            val authorName = nameMap[authorId] ?: ""
+        // Second pass: assemble final ScrapbookEntry with names + avatars filled in.
+        return raws.map { (doc, rawPhotos, rawComments) ->
+            val authorId    = doc.getString("authorId") ?: ""
+            val authorBrief = briefs[authorId]
+
+            val photos = rawPhotos.map { m ->
+                val uploaderId = m["uploaderId"] as? String ?: ""
+                val brief      = briefs[uploaderId]
+                Photo(
+                    photoId           = m["photoId"]     as? String ?: "",
+                    url               = m["url"]         as? String ?: "",
+                    storagePath       = m["storagePath"] as? String ?: "",
+                    description       = m["description"] as? String ?: "",
+                    uploaderId        = uploaderId,
+                    uploaderName      = brief?.name      ?: (authorBrief?.name      ?: ""),
+                    uploaderAvatarUrl = brief?.avatarUrl ?: (authorBrief?.avatarUrl ?: "")
+                )
+            }
 
             val comments = rawComments.map { (commentId, m) ->
                 val cAuthorId = m["authorId"] as? String ?: ""
+                val cBrief    = briefs[cAuthorId]
                 Comment(
-                    id         = commentId,
-                    authorId   = cAuthorId,
-                    authorName = nameMap[cAuthorId] ?: "",
-                    text       = m["text"] as? String ?: ""
+                    id              = commentId,
+                    authorId        = cAuthorId,
+                    authorName      = cBrief?.name      ?: "",
+                    authorAvatarUrl = cBrief?.avatarUrl ?: "",
+                    text            = m["text"] as? String ?: ""
                 )
             }
 
             val dateLabel = doc.getTimestamp("date")?.toDate()?.let { dayLabel.format(it) } ?: ""
 
             ScrapbookEntry(
-                id           = doc.id,
-                authorId     = authorId,
-                authorName   = authorName,
-                date         = dateLabel,
-                title        = doc.getString("title") ?: "",
-                tags         = (doc.get("tags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-                photos       = photos,
-                comments     = comments,
-                commentCount = (doc.getLong("commentCount") ?: 0L).toInt()
+                id              = doc.id,
+                authorId        = authorId,
+                authorName      = authorBrief?.name      ?: "",
+                authorAvatarUrl = authorBrief?.avatarUrl ?: "",
+                date            = dateLabel,
+                title           = doc.getString("title") ?: "",
+                tags            = (doc.get("tags") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                photos          = photos,
+                comments        = comments,
+                commentCount    = (doc.getLong("commentCount") ?: 0L).toInt()
             )
         }
     }
