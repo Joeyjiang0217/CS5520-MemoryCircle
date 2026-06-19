@@ -221,6 +221,7 @@ private fun ResultsList(
                 AvatarListRow(
                     name     = friend.name,
                     subtitle = friend.email,
+                    photoUrl = friend.avatarUrl,
                     onClick  = { onFriendTap(friend) }
                 )
                 HorizontalDivider(color = Beige.copy(alpha = 0.5f))

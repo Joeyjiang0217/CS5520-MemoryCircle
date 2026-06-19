@@ -37,6 +37,7 @@ fun DevToolsScreen(
     val friendsState       by viewModel.friendsState.collectAsStateWithLifecycle()
     val profilesState      by viewModel.profilesState.collectAsStateWithLifecycle()
     val clearProfilesState by viewModel.clearProfilesState.collectAsStateWithLifecycle()
+    val acceptForU6State   by viewModel.acceptForU6State.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -108,6 +109,14 @@ fun DevToolsScreen(
                 buttonLabel = "Clear profiles",
                 state       = clearProfilesState,
                 onRun       = { viewModel.clearProfiles() }
+            )
+
+            SeedSection(
+                title       = "Accept friend requests for Test User 6",
+                description = "Impersonates 6@test.com and accepts every friend request currently sitting in their inbox. Use after sending Test User 6 an invitation from AddFriendSearch — Firestore Console first confirms the request landed, then this button promotes it to a real friendship without signing in as 6@test.com.",
+                buttonLabel = "Accept for Test User 6",
+                state       = acceptForU6State,
+                onRun       = { viewModel.acceptForU6() }
             )
         }
     }

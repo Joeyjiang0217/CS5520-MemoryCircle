@@ -43,7 +43,12 @@ object SeedRepository {
 
     private val db: FirebaseFirestore get() = FirebaseModule.db
 
-    data class SeedReport(val createdUsers: Int, val skippedUsers: Int, val errors: List<String>)
+    data class SeedReport(
+        val createdUsers:    Int,
+        val skippedUsers:    Int,
+        val backfilledUsers: Int,
+        val errors:          List<String>
+    )
 
     /**
      * Registers users 1@test.com .. 10@test.com (password "123456") on a
@@ -57,9 +62,10 @@ object SeedRepository {
     suspend fun seedTestUsers(appContext: Context, count: Int = 10): SeedReport {
         val secondary = secondaryApp(appContext)
         val auth = FirebaseAuth.getInstance(secondary)
-        val errors  = mutableListOf<String>()
-        var created = 0
-        var skipped = 0
+        val errors     = mutableListOf<String>()
+        var created    = 0
+        var skipped    = 0
+        var backfilled = 0
 
         for (i in 1..count) {
             val email = "$i@test.com"
@@ -71,7 +77,9 @@ object SeedRepository {
                 db.collection("users").document(uid).set(mapOf(
                     "uid"         to uid,
                     "name"        to name,
+                    "nameLower"   to AuthRepository.nameLower(name),
                     "emailMasked" to AuthRepository.maskEmail(email),
+                    "emailHash"   to AuthRepository.emailHash(email),
                     "bio"         to "",
                     "avatarUrl"   to "",
                     "createdAt"   to FieldValue.serverTimestamp()
@@ -79,14 +87,32 @@ object SeedRepository {
                 auth.signOut()
                 created++
             } catch (e: Exception) {
-                // Most likely cause is "email already in use" — counts as skipped.
                 val msg = e.message ?: ""
-                if (msg.contains("already in use", ignoreCase = true)) skipped++
-                else errors += "$email: $msg"
+                if (msg.contains("already in use", ignoreCase = true)) {
+                    // Auth account exists from a prior seed run. The users
+                    // doc was likely written by an older build that
+                    // didn't know about nameLower / emailHash, so name
+                    // searches (orderBy "nameLower") would silently drop
+                    // it. Resolve the uid by display name (the only key
+                    // stable across schema versions) and merge the
+                    // missing indexed fields in.
+                    val patched = runCatching {
+                        val existingUid = lookupUidsByName(listOf(name))[name]
+                            ?: return@runCatching false
+                        db.collection("users").document(existingUid).set(mapOf(
+                            "nameLower"   to AuthRepository.nameLower(name),
+                            "emailMasked" to AuthRepository.maskEmail(email),
+                            "emailHash"   to AuthRepository.emailHash(email)
+                        ), SetOptions.merge()).await()
+                        true
+                    }.getOrDefault(false)
+                    if (patched) backfilled++
+                    skipped++
+                } else errors += "$email: $msg"
             }
         }
 
-        return SeedReport(created, skipped, errors)
+        return SeedReport(created, skipped, backfilled, errors)
     }
 
     /**
@@ -257,14 +283,16 @@ object SeedRepository {
         names.forEach { n ->
             val uid = byName[n] ?: return@forEach
             val number = n.substringAfterLast(' ')
+            val email     = "$number@test.com"
             val bio       = "I'm $n — auto-seeded from Dev Tools."
             val avatarUrl = "https://picsum.photos/seed/testuser_$number/200/200"
-            val emailMasked = AuthRepository.maskEmail("$number@test.com")
 
             db.collection("users").document(uid).set(mapOf(
                 "bio"         to bio,
                 "avatarUrl"   to avatarUrl,
-                "emailMasked" to emailMasked,
+                "nameLower"   to AuthRepository.nameLower(n),
+                "emailMasked" to AuthRepository.maskEmail(email),
+                "emailHash"   to AuthRepository.emailHash(email),
                 "email"       to FieldValue.delete()
             ), SetOptions.merge()).await()
 
@@ -300,6 +328,57 @@ object SeedRepository {
             cleared++
         }
         return cleared
+    }
+
+    /**
+     * Impersonates "Test User N" accepting every incoming friend request in
+     * their `incomingRequests` subcollection. For each request:
+     *   - writes both sides of the friendship (users/{N}/friends/{from} +
+     *     users/{from}/friends/{N})
+     *   - deletes both sides of the request (incomingRequests/{from} on
+     *     user N, outgoingRequests/{N} on the sender)
+     * All four writes per request go in a single batch so the request can't
+     * survive in a half-deleted state.
+     *
+     * Used by the Dev Tools button so the developer can verify the
+     * request → accept → friendship flow without signing in as the test
+     * user. Idempotent — re-running on an empty inbox is a no-op.
+     */
+    suspend fun acceptIncomingRequestsForTestUser(n: Int = 6): Int {
+        val name = "Test User $n"
+        val byName = lookupUidsByName(listOf(name))
+        val targetUid = byName[name] ?: error("$name not found — run 'Seed users' first")
+
+        val incomingSnap = db.collection("users").document(targetUid)
+            .collection("incomingRequests").get().await()
+
+        var accepted = 0
+        incomingSnap.documents.forEach { reqDoc ->
+            val fromUid = reqDoc.id
+            runCatching {
+                val targetFriendRef = db.collection("users").document(targetUid)
+                    .collection("friends").document(fromUid)
+                val senderFriendRef = db.collection("users").document(fromUid)
+                    .collection("friends").document(targetUid)
+                val senderOutgoingRef = db.collection("users").document(fromUid)
+                    .collection("outgoingRequests").document(targetUid)
+
+                db.runBatch { batch ->
+                    batch.set(targetFriendRef, mapOf(
+                        "uid"   to fromUid,
+                        "since" to FieldValue.serverTimestamp()
+                    ))
+                    batch.set(senderFriendRef, mapOf(
+                        "uid"   to targetUid,
+                        "since" to FieldValue.serverTimestamp()
+                    ))
+                    batch.delete(reqDoc.reference)
+                    batch.delete(senderOutgoingRef)
+                }.await()
+                accepted++
+            }
+        }
+        return accepted
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

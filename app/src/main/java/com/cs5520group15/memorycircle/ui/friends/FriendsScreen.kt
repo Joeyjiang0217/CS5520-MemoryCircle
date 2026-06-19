@@ -551,13 +551,25 @@ private fun SwipeableFriendRow(
         }
     )
 
-    // Snap back when this row is no longer the one pending deletion (e.g. the
-    // user cancelled the dialog, or confirmed it and the underlying listener
-    // hasn't republished yet).
+    // The reset has two timelines:
+    //   - explicit dialog cancel / confirm → animate (smooth snap-back)
+    //   - row entering composition with a stale dismiss value preserved by
+    //     the LazyColumn / nav back stack → snap silently so the user doesn't
+    //     see a phantom animation play on their way back into the screen.
+    //
+    // `hasInteracted` flips on the first observed transition INTO this row's
+    // pending-delete slot, so cancellation-driven resets after that point
+    // keep their animation.
+    var hasInteracted by remember { mutableStateOf(false) }
     LaunchedEffect(pendingDeleteId) {
         val thisRowIsActive = pendingDeleteId == friend.id
+        if (thisRowIsActive) hasInteracted = true
         if (!thisRowIsActive && dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-            dismissState.reset()
+            if (hasInteracted) {
+                dismissState.reset()
+            } else {
+                dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+            }
         }
     }
 

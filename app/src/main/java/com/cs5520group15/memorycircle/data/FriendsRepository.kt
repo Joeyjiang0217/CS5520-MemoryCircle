@@ -45,16 +45,23 @@ object FriendsRepository {
     private val _groups            = MutableStateFlow<List<GroupSummary>>(emptyList())
     private val _discoverableUsers = MutableStateFlow<List<Friend>>(emptyList())
     private val _invitedUserIds    = MutableStateFlow<Set<String>>(emptySet())
+    /** uids the signed-in user has an outstanding outgoing friend request to
+     *  (request sent, not yet accepted). Drives the "Invitation sent" pill in
+     *  AddFriendSearch. Cleared automatically when the request is accepted /
+     *  declined / cancelled, via the outgoingRequests subcollection listener. */
+    private val _outgoingRequests  = MutableStateFlow<Set<String>>(emptySet())
 
     val friends:           StateFlow<List<Friend>>        = _friends.asStateFlow()
     val requests:          StateFlow<List<FriendRequest>> = _requests.asStateFlow()
     val groups:            StateFlow<List<GroupSummary>>  = _groups.asStateFlow()
     val discoverableUsers: StateFlow<List<Friend>>        = _discoverableUsers.asStateFlow()
     val invitedUserIds:    StateFlow<Set<String>>         = _invitedUserIds.asStateFlow()
+    val outgoingRequests:  StateFlow<Set<String>>         = _outgoingRequests.asStateFlow()
 
-    private var friendsListener: ListenerRegistration? = null
-    private var groupsListener:  ListenerRegistration? = null
-    private var boundUid:        String? = null
+    private var friendsListener:          ListenerRegistration? = null
+    private var groupsListener:           ListenerRegistration? = null
+    private var outgoingRequestsListener: ListenerRegistration? = null
+    private var boundUid:                 String? = null
 
     /**
      * Raw inputs from the friends / groups listeners — held so we can rebuild
@@ -121,6 +128,15 @@ object FriendsRepository {
                 }
                 syncUserListeners()
                 rebuildGroups()
+            }
+
+        // 3) Outgoing friend requests — drives the "Invitation sent" pill in
+        //    AddFriendSearch. Each doc id is the target uid.
+        outgoingRequestsListener = db.collection("users").document(uid)
+            .collection("outgoingRequests")
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null) return@addSnapshotListener
+                _outgoingRequests.value = snap.documents.map { it.id }.toSet()
             }
     }
 
@@ -191,15 +207,135 @@ object FriendsRepository {
     }
 
     fun detach() {
-        friendsListener?.remove(); friendsListener = null
-        groupsListener?.remove();  groupsListener  = null
+        friendsListener?.remove();          friendsListener          = null
+        groupsListener?.remove();           groupsListener           = null
+        outgoingRequestsListener?.remove(); outgoingRequestsListener = null
         userListeners.values.forEach { it.remove() }
         userListeners.clear()
         userCards.clear()
-        lastFriendUids = emptyList()
-        lastGroups     = emptyList()
+        lastFriendUids        = emptyList()
+        lastGroups            = emptyList()
+        _outgoingRequests.value = emptySet()
         boundUid = null
     }
+
+    /**
+     * What: One-shot Firestore search for the "add new friend" flow.
+     *
+     *       Full-email queries match against `emailHash` (SHA-256 of the
+     *       normalized address) — emailMasked is too lossy to be an index
+     *       (multiple addresses can collapse to the same mask). Plain-text
+     *       queries do a Firestore prefix search against `nameLower`
+     *       (orderBy + startAt/endAt) capped at 20, so "test", "Test",
+     *       and "TEST" all match "Test User 1". Self and already-friend
+     *       uids are filtered out so the picker only surfaces actionable
+     *       rows.
+     *
+     *       Both branches ride Firestore's B-tree index, so the cost
+     *       stays O(log N + K) on the matched-row count — no linear
+     *       scan over the users collection even at very large N.
+     *
+     * Who: Used by AddFriendSearchViewModel.submit().
+     * When: Per Search-key press in the add-friend search overlay.
+     */
+    suspend fun searchUsers(query: String): List<Friend> {
+        val needle = query.trim()
+        if (needle.isEmpty()) return emptyList()
+
+        val me = AuthRepository.currentUid
+        val myFriendIds = _friends.value.map { it.id }.toSet()
+
+        return try {
+            val snap = if (EmailShape.matches(needle)) {
+                // Full email → hash the same way registration does and
+                // exact-match against the public emailHash field so each
+                // address resolves to a unique user (no mask collisions).
+                db.collection("users")
+                    .whereEqualTo("emailHash", AuthRepository.emailHash(needle))
+                    .limit(20)
+                    .get().await()
+            } else {
+                // Name prefix on the lowercased index field, so the
+                // query is case-insensitive. The
+                // `` upper bound is the standard high-codepoint
+                // sentinel for Firestore prefix range queries.
+                val lower = AuthRepository.nameLower(needle)
+                db.collection("users")
+                    .orderBy("nameLower")
+                    .startAt(lower)
+                    .endAt(lower + "")
+                    .limit(20)
+                    .get().await()
+            }
+
+            snap.documents.mapNotNull { doc ->
+                val uid = doc.id
+                if (uid == me || uid in myFriendIds) return@mapNotNull null
+                Friend(
+                    id             = uid,
+                    name           = doc.getString("name").orEmpty(),
+                    email          = doc.getString("emailMasked").orEmpty(),
+                    sharedMemories = 0,
+                    isOnline       = false,
+                    avatarUrl      = doc.getString("avatarUrl").orEmpty(),
+                    bio            = doc.getString("bio").orEmpty()
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * What: Sends a friend request to `targetUid`. Writes both halves of the
+     *       request in a single batch:
+     *         users/{target}/incomingRequests/{me}  — denormalized sender
+     *           card (name + avatar + bio) so the receiver can render the
+     *           request row without a second read.
+     *         users/{me}/outgoingRequests/{target} — bare {uid, requestedAt}
+     *           so our outgoing-requests listener can drive the
+     *           "Invitation sent" pill in AddFriendSearch.
+     *
+     *       The actual friendship only materializes when the target accepts
+     *       (see SeedRepository.acceptIncomingRequestsForTestUser for the
+     *       symmetric write that flips a request into a friend pair).
+     *       Idempotent against double-tap: a uid that already sits in
+     *       `outgoingRequests` or `friends` short-circuits.
+     */
+    suspend fun sendFriendRequest(targetUid: String) {
+        val me = AuthRepository.currentUid ?: return
+        if (targetUid == me) return
+        if (targetUid in _outgoingRequests.value) return
+        if (_friends.value.any { it.id == targetUid }) return
+
+        // Read my own card off the public users doc so the receiver's
+        // request row has display data without an extra read on their side.
+        val mySnap = db.collection("users").document(me).get().await()
+        val myName      = mySnap.getString("name").orEmpty()
+        val myAvatarUrl = mySnap.getString("avatarUrl").orEmpty()
+        val myBio       = mySnap.getString("bio").orEmpty()
+
+        val incomingRef = db.collection("users").document(targetUid)
+            .collection("incomingRequests").document(me)
+        val outgoingRef = db.collection("users").document(me)
+            .collection("outgoingRequests").document(targetUid)
+
+        db.runBatch { batch ->
+            batch.set(incomingRef, mapOf(
+                "uid"         to me,
+                "name"        to myName,
+                "avatarUrl"   to myAvatarUrl,
+                "bio"         to myBio,
+                "requestedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            ))
+            batch.set(outgoingRef, mapOf(
+                "uid"         to targetUid,
+                "requestedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+            ))
+        }.await()
+    }
+
+    private val EmailShape = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 
     /**
      * Symmetrically removes a friendship: deletes both users/{me}/friends/{friendUid}

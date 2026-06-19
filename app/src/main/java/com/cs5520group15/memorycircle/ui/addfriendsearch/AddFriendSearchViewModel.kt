@@ -1,96 +1,103 @@
 package com.cs5520group15.memorycircle.ui.addfriendsearch
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.cs5520group15.memorycircle.data.FriendsRepository
 import com.cs5520group15.memorycircle.model.Friend
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 
 /**
- * What: State for the "Add new friend" search overlay. Holds two distinct
- *       strings — the live `query` (what the user is currently typing) and the
- *       committed `submittedQuery` (the query that was active the last time
- *       the user tapped Search on the keyboard). Results are derived from
- *       `submittedQuery` only — live-as-you-type filtering hurt UX when
- *       searching against the broader user pool, so the screen waits for an
- *       explicit submit instead.
+ * What: State for the "Add new friend" search overlay. Holds the live `query`
+ *       (what the user is currently typing), the committed `submittedQuery`
+ *       (last query the user pressed Search on), and the search results
+ *       loaded from Firestore.
  *
- *       Matching logic, per spec:
- *         - If the query looks like a complete email (matches the EmailShape
- *           regex below), do a case-insensitive EXACT match against email.
- *         - Otherwise fall back to a case-insensitive SUBSTRING match against
- *           name. Partial emails ("a@", "@gmail") therefore return nothing,
- *           which is the intended behaviour — adding a friend by their email
- *           requires typing the whole thing.
+ *       Matching logic (server-side, via FriendsRepository.searchUsers):
+ *         - Full email (matches EmailShape regex) → exact-match on the public
+ *           emailMasked field (we mask the input the same way registration
+ *           masks the email, then equal-match).
+ *         - Plain text → name prefix query (Firestore's natural sort), capped
+ *           at 20 results. Case-sensitive on the server side; this is the
+ *           same limitation any prefix index has without a normalized
+ *           nameLower field.
+ *
+ *       Self + existing friends are filtered out server-side so the result
+ *       list only ever shows people the user can actually add.
  * Who: Used by AddFriendSearchScreen.
  * When: Created on first composition; survives config changes.
  */
 class AddFriendSearchViewModel : ViewModel() {
 
+    // FriendsRepository.bind() so we have a live friend list to dedupe
+    // against; idempotent if FriendsViewModel already bound earlier.
+    init { FriendsRepository.bind() }
+
     private val _query          = MutableStateFlow("")
     private val _submittedQuery = MutableStateFlow("")
+    private val _results        = MutableStateFlow<List<Friend>>(emptyList())
+    private val _isSearching    = MutableStateFlow(false)
+    private val _isAdding       = MutableStateFlow<Set<String>>(emptySet())
 
-    val query:          StateFlow<String>     = _query
-    val submittedQuery: StateFlow<String>     = _submittedQuery
+    val query:          StateFlow<String>       = _query.asStateFlow()
+    val submittedQuery: StateFlow<String>       = _submittedQuery.asStateFlow()
+    val results:        StateFlow<List<Friend>> = _results.asStateFlow()
+    val isSearching:    StateFlow<Boolean>      = _isSearching.asStateFlow()
+    /** uids whose Add-friend write is currently in flight. The row's pill
+     *  reads as locked while the uid is in this set. */
+    val isAdding:       StateFlow<Set<String>>  = _isAdding.asStateFlow()
 
-    val users:    StateFlow<List<Friend>>     = FriendsRepository.discoverableUsers
-    val friends:  StateFlow<List<Friend>>     = FriendsRepository.friends
-    val invited:  StateFlow<Set<String>>      = FriendsRepository.invitedUserIds
+    val friends:          StateFlow<List<Friend>>  = FriendsRepository.friends
+    val outgoingRequests: StateFlow<Set<String>>   = FriendsRepository.outgoingRequests
+
+    sealed class AddFriendEvent {
+        data class ShowSnackbar(val message: String) : AddFriendEvent()
+    }
+    private val _events = Channel<AddFriendEvent>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
 
     fun onQueryChange(s: String) { _query.value = s }
 
     /**
-     * What: Commits the current live query as the submitted query, which is
-     *       what the result list reads from.
-     * Who: Called by AddFriendSearchScreen when the user taps Search on the
-     *      soft keyboard.
-     * When: Per Search-key press.
+     * Commits the current live query and fires the Firestore search. The
+     * screen layer is responsible for the offline pre-check so we never get
+     * here without network; we still emit a snackbar on Firestore errors.
      */
     fun submit() {
-        _submittedQuery.value = _query.value
-    }
-
-    /**
-     * What: Marks the given user as invited. Idempotent and friend-aware — the
-     *       repository drops the call if the target is already a friend or
-     *       has already been invited.
-     * Who: Called by AddFriendSearchScreen on Add-button tap.
-     * When: Per Add tap on a search result row.
-     */
-    fun invite(userId: String) = FriendsRepository.invite(userId)
-
-    /**
-     * What: Per-spec matching, always case-insensitive.
-     *         - Complete-email query → exact match against email (applies to
-     *           friends and non-friends equally — confirming an already-added
-     *           contact by their full address is useful, not confusing).
-     *         - Plain text query → username search. For NON-FRIENDS we do
-     *           substring matching so the user can discover new people; for
-     *           ALREADY-FRIENDS we require a full name match so they don't
-     *           muddy substring results on what's primarily an
-     *           "add a new friend" screen.
-     * Who: Called by AddFriendSearchScreen to derive the visible results.
-     * When: Every recomposition while submittedQuery is non-blank.
-     */
-    fun match(q: String): List<Friend> {
-        val needle = q.trim()
-        if (needle.isEmpty()) return emptyList()
-
-        if (needle.matches(EmailShape)) {
-            return users.value.filter { it.email.equals(needle, ignoreCase = true) }
+        val q = _query.value.trim()
+        _submittedQuery.value = q
+        if (q.isEmpty()) {
+            _results.value = emptyList()
+            return
         }
-
-        val friendIds = friends.value.map { it.id }.toSet()
-        return users.value.filter { u ->
-            if (u.id in friendIds) {
-                u.name.equals(needle, ignoreCase = true)
-            } else {
-                u.name.contains(needle, ignoreCase = true)
-            }
+        viewModelScope.launch {
+            _isSearching.value = true
+            _results.value = runCatching { FriendsRepository.searchUsers(q) }
+                .getOrElse {
+                    _events.send(AddFriendEvent.ShowSnackbar(it.message ?: "Search failed"))
+                    emptyList()
+                }
+            _isSearching.value = false
         }
     }
 
-    companion object {
-        private val EmailShape = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+    /**
+     * Sends a friend request via FriendsRepository.sendFriendRequest. Once
+     * the write succeeds the outgoingRequests listener fires and the
+     * recipient's uid lands in `outgoingRequests`, flipping the row's pill
+     * to "Invitation sent" via the screen-level membership check. While the
+     * write is in flight the uid sits in `_isAdding` so the pill is locked
+     * showing "Sending..." instead.
+     */
+    fun sendFriendRequest(userId: String) = viewModelScope.launch {
+        if (userId in _isAdding.value) return@launch
+        _isAdding.value = _isAdding.value + userId
+        runCatching { FriendsRepository.sendFriendRequest(userId) }
+            .onFailure { _events.send(AddFriendEvent.ShowSnackbar(it.message ?: "Failed to send request")) }
+        _isAdding.value = _isAdding.value - userId
     }
 }

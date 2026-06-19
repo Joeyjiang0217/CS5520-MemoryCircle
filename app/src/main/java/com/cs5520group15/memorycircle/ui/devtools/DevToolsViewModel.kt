@@ -32,6 +32,7 @@ class DevToolsViewModel : ViewModel() {
     private val _friendsState     = MutableStateFlow<ActionState>(ActionState.Idle)
     private val _profilesState    = MutableStateFlow<ActionState>(ActionState.Idle)
     private val _clearProfilesState = MutableStateFlow<ActionState>(ActionState.Idle)
+    private val _acceptForU6State   = MutableStateFlow<ActionState>(ActionState.Idle)
 
     val usersState:         StateFlow<ActionState> = _usersState.asStateFlow()
     val postState:          StateFlow<ActionState> = _postState.asStateFlow()
@@ -39,13 +40,17 @@ class DevToolsViewModel : ViewModel() {
     val friendsState:       StateFlow<ActionState> = _friendsState.asStateFlow()
     val profilesState:      StateFlow<ActionState> = _profilesState.asStateFlow()
     val clearProfilesState: StateFlow<ActionState> = _clearProfilesState.asStateFlow()
+    val acceptForU6State:   StateFlow<ActionState> = _acceptForU6State.asStateFlow()
 
     fun seedUsers(appContext: Context) = viewModelScope.launch {
         _usersState.value = ActionState.Running
         _usersState.value = runCatching { SeedRepository.seedTestUsers(appContext) }
             .fold(
                 onSuccess = { r ->
-                    val tail = if (r.errors.isEmpty()) "" else " · ${r.errors.size} errors"
+                    val tail = buildString {
+                        if (r.backfilledUsers > 0) append(" · backfilled ${r.backfilledUsers}")
+                        if (r.errors.isNotEmpty()) append(" · ${r.errors.size} errors")
+                    }
                     ActionState.Success("Created ${r.createdUsers}, skipped ${r.skippedUsers}$tail")
                 },
                 onFailure = { ActionState.Error(it.message ?: "Unknown error") }
@@ -99,6 +104,23 @@ class DevToolsViewModel : ViewModel() {
         _clearProfilesState.value = runCatching { SeedRepository.clearTestUserProfiles() }
             .fold(
                 onSuccess = { n -> ActionState.Success("Cleared bio + avatar on $n test user(s)") },
+                onFailure = { ActionState.Error(it.message ?: "Unknown error") }
+            )
+    }
+
+    /**
+     * Impersonates Test User 6 and accepts every pending friend request in
+     * their inbox. Lets the developer verify the request → accept → friendship
+     * flow without signing in as the test user.
+     */
+    fun acceptForU6() = viewModelScope.launch {
+        _acceptForU6State.value = ActionState.Running
+        _acceptForU6State.value = runCatching { SeedRepository.acceptIncomingRequestsForTestUser(6) }
+            .fold(
+                onSuccess = { n ->
+                    if (n == 0) ActionState.Success("No pending requests for Test User 6")
+                    else ActionState.Success("Accepted $n request(s) for Test User 6")
+                },
                 onFailure = { ActionState.Error(it.message ?: "Unknown error") }
             )
     }

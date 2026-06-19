@@ -79,21 +79,30 @@ object ProfileRepository {
                 )
 
                 // One-shot self-heal: accounts registered before the
-                // emailMasked split don't have the field populated. As soon as
-                // we observe that, write the masked address derived from Auth
-                // so the user's MemberProfile row shows the correct chip
-                // without a manual Firestore-console edit. Idempotent via
-                // [maskedBackfillDone].
-                if (!maskedBackfillDone && snap.getString("emailMasked").isNullOrBlank()
-                    && authEmail.isNotBlank()) {
+                // emailMasked / emailHash / nameLower split don't have the
+                // fields populated. As soon as we observe that, derive them
+                // from Auth's email and the existing display name so
+                // MemberProfile renders the right chip and AddFriendSearch
+                // can hash-match / case-insensitive-prefix-match this
+                // account without a manual Firestore-console edit.
+                // Idempotent via [maskedBackfillDone].
+                val name        = snap.getString("name").orEmpty()
+                val needsMasked = snap.getString("emailMasked").isNullOrBlank()
+                val needsHash   = snap.getString("emailHash").isNullOrBlank()
+                val needsLower  = snap.getString("nameLower").isNullOrBlank() && name.isNotBlank()
+                if (!maskedBackfillDone && (needsMasked || needsHash || needsLower) && (authEmail.isNotBlank() || needsLower)) {
                     maskedBackfillDone = true
+                    val patch = mutableMapOf<String, Any>()
+                    if (authEmail.isNotBlank()) {
+                        patch["emailMasked"] = AuthRepository.maskEmail(authEmail)
+                        patch["emailHash"]   = AuthRepository.emailHash(authEmail)
+                        patch["email"]       = FieldValue.delete()
+                    }
+                    if (needsLower) patch["nameLower"] = AuthRepository.nameLower(name)
                     scope.launch {
                         runCatching {
                             db.collection("users").document(uid)
-                                .update(mapOf(
-                                    "emailMasked" to AuthRepository.maskEmail(authEmail),
-                                    "email"       to FieldValue.delete()
-                                )).await()
+                                .update(patch).await()
                         }
                     }
                 }
@@ -114,7 +123,10 @@ object ProfileRepository {
         if (trimmed.isEmpty()) return
         val uid = AuthRepository.currentUid ?: return
         db.collection("users").document(uid)
-            .update("name", trimmed).await()
+            .update(mapOf(
+                "name"      to trimmed,
+                "nameLower" to AuthRepository.nameLower(trimmed)
+            )).await()
         fanOutToMyGroupMembers(uid, mapOf("name" to trimmed))
     }
 

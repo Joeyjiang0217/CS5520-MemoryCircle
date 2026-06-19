@@ -47,7 +47,9 @@ object AuthRepository {
             val userDoc = mapOf(
                 "uid"         to uid,
                 "name"        to name,
+                "nameLower"   to nameLower(name),
                 "emailMasked" to maskEmail(email),
+                "emailHash"   to emailHash(email),
                 "bio"         to "",
                 "avatarUrl"   to "",
                 "createdAt"   to FieldValue.serverTimestamp()
@@ -187,4 +189,42 @@ object AuthRepository {
         val domain = email.substring(at)
         return "${local.first()}***$domain"
     }
+
+    /**
+     * What: Non-reversible search index for emails — SHA-256 of the email
+     *       lowercased + trimmed. Stored on the public users doc as
+     *       `emailHash` so AddFriendSearch can do an exact `whereEqualTo`
+     *       lookup without exposing the address.
+     *
+     *       Why not search by `emailMasked` directly? The mask is lossy —
+     *       "1@test.com", "10@test.com", and "100@test.com" all collapse to
+     *       "1***@test.com", so a masked-equality query would return
+     *       multiple users and the searcher couldn't pick the right one.
+     *       The hash collides cryptographically, not by prefix, so unique
+     *       emails always map to unique hashes.
+     *
+     *       Privacy note: for a small known user space (a class roster) a
+     *       dictionary attack can recover originals from hashes. For a real
+     *       product you'd salt or move the lookup behind a Cloud Function.
+     *       For this demo the trade-off is fine.
+     */
+    fun emailHash(email: String): String {
+        val normalized = email.trim().lowercase()
+        val bytes = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(normalized.toByteArray(Charsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * What: Case-folded search key for display names. Stored on the public
+     *       users doc as `nameLower` so AddFriendSearch's prefix query can be
+     *       case-insensitive — "test" matches "Test User 1", "TEST", etc.
+     *
+     *       Firestore's orderBy/startAt/endAt index lookups are O(log N + K)
+     *       on the result-set size — there's no linear scan across users, so
+     *       the prefix query stays fast at millions of docs as long as we
+     *       have a single indexed field to sort on. That's exactly what
+     *       `nameLower` is for.
+     */
+    fun nameLower(name: String): String = name.trim().lowercase()
 }
