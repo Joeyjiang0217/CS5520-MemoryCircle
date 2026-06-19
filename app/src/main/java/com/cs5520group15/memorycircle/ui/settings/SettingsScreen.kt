@@ -35,6 +35,7 @@ fun SettingsScreen(
     onBack:                      () -> Unit,
     onOpenProfile:               () -> Unit,
     onOpenNotificationSettings:  () -> Unit,
+    onOpenDevTools:              () -> Unit = {},
     onLogout:                    () -> Unit
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -58,6 +59,8 @@ fun SettingsScreen(
             SettingsRow(label = "Profile",       onClick = onOpenProfile)
             RowDivider()
             SettingsRow(label = "Notifications", onClick = onOpenNotificationSettings)
+            RowDivider()
+            SettingsRow(label = "Dev Tools",     onClick = onOpenDevTools)
             RowDivider()
 
             Spacer(modifier = Modifier.weight(1f))

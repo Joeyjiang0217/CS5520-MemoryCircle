@@ -233,6 +233,21 @@ object ScrapbookRepository {
         refreshGroup(groupId)
     }
 
+    /**
+     * One-shot read of every post inside a specific past month's scrapbook.
+     * Used by the read-only ScrapbookHistoryScreen — no listener attached,
+     * historical pages don't need live updates and we don't want them to
+     * clobber the current-month listener's flow for the same group.
+     *
+     * @param scrapbookId the month's doc id ("YYYY-MM")
+     */
+    suspend fun loadMonthEntries(groupId: String, scrapbookId: String): List<ScrapbookEntry> {
+        val snap = postsRef(groupId, scrapbookId)
+            .orderBy("date", Query.Direction.DESCENDING)
+            .get().await()
+        return assemble(snap.documents)
+    }
+
     fun entry(groupId: String, entryId: String): ScrapbookEntry? =
         flows[groupId]?.value?.firstOrNull { it.id == entryId }
 

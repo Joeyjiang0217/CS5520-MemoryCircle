@@ -16,15 +16,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.cs5520group15.memorycircle.data.ScrapbookRepository
 import com.cs5520group15.memorycircle.model.Comment
 import com.cs5520group15.memorycircle.model.Photo
 import com.cs5520group15.memorycircle.model.ScrapbookEntry
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
+import com.cs5520group15.memorycircle.ui.common.EmptyHint
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.theme.*
+import java.time.Month
+import java.time.YearMonth
+import java.util.Locale
 
 /**
  * What: Read-only historical view of a single month's scrapbook for one group.
@@ -46,8 +49,23 @@ fun ScrapbookHistoryScreen(
     year:    String,
     onBack:  () -> Unit
 ) {
-    val entriesFlow = remember(groupId) { ScrapbookRepository.entriesFor(groupId) }
-    val entries by entriesFlow.collectAsStateWithLifecycle()
+    // Map ("March", "2025") → "2025-03" so we can hit the right Firestore doc.
+    val scrapbookId = remember(month, year) {
+        runCatching {
+            val m = Month.valueOf(month.uppercase(Locale.ENGLISH)).value
+            YearMonth.of(year.toInt(), m).toString()
+        }.getOrDefault(YearMonth.now().toString())
+    }
+
+    var entries by remember(groupId, scrapbookId) { mutableStateOf<List<ScrapbookEntry>>(emptyList()) }
+    var loading by remember(groupId, scrapbookId) { mutableStateOf(true) }
+
+    LaunchedEffect(groupId, scrapbookId) {
+        loading = true
+        entries = runCatching { ScrapbookRepository.loadMonthEntries(groupId, scrapbookId) }
+            .getOrDefault(emptyList())
+        loading = false
+    }
 
     Scaffold(
         containerColor = Cream,
@@ -59,6 +77,17 @@ fun ScrapbookHistoryScreen(
             )
         }
     ) { padding ->
+        if (!loading && entries.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                EmptyHint(text = "No memories were captured this month.")
+            }
+            return@Scaffold
+        }
+
         LazyColumn(
             modifier       = Modifier
                 .fillMaxSize()

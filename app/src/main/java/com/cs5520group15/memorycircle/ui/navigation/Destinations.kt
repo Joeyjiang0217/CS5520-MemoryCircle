@@ -48,6 +48,10 @@ import kotlinx.serialization.Serializable
 // Notification toggles — opened from the Notifications row on Settings.
 @Serializable object NotificationSettings
 
+// Debug-only Dev Tools page — opened from the Dev Tools row on Settings.
+// Hosts seed buttons used to pre-populate Firestore during development.
+@Serializable object DevTools
+
 // Read-only profile view for someone OTHER than the current user — opened by
 // tapping any friend/member/result/request row across the app. Email is
 // privacy-masked on this surface.
