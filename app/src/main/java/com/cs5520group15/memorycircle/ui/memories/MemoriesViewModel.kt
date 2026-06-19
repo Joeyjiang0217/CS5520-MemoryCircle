@@ -16,6 +16,23 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/**
+ * What: Holds the UI state for the Memories (calendar) screen.
+ *       Real-time subscriptions on two levels:
+ *         - the user's group list (groups where memberIds array-contains uid)
+ *         - each member group's scrapbooks subcollection
+ *       Two-level listening is required because creating a new group writes
+ *       the group doc first and the seed scrapbook a few RPCs later — a
+ *       one-shot .get() on scrapbooks racing the group-doc listener returns
+ *       empty for the brand-new group.
+ *
+ *       Each rebuild also resolves a thumbnail URL per scrapbook by querying
+ *       the most recent post in that month and taking its first photo. Cached
+ *       per (groupId, sbId, postCount) so it only re-fetches when a new post
+ *       changes the latest-photo for that scrapbook.
+ * Who: Used by MemoriesScreen.
+ * When: Created when MemoriesScreen is first displayed; survives config changes.
+ */
 class MemoriesViewModel : ViewModel() {
 
     data class Scrapbook(
