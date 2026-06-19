@@ -16,5 +16,6 @@ data class Member(
     val name:           String,
     val sharedMemories: Int,
     val isOnline:       Boolean = false,
-    val avatarUrl:      String  = ""
+    val avatarUrl:      String  = "",
+    val bio:            String  = ""
 )

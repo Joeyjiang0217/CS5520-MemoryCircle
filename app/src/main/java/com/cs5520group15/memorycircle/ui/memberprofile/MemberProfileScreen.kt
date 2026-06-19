@@ -17,11 +17,13 @@ import com.cs5520group15.memorycircle.ui.theme.*
 
 /**
  * What: Read-only profile view for someone OTHER than the current user. Layout
- *       mirrors ProfileScreen's hero — large centred avatar, name, sub-line,
- *       email — but omits the Edit-Profile / Settings affordances since those
- *       only make sense for the current user. The email is partially masked
- *       (first two local-part characters preserved, rest replaced with four
- *       stars) for privacy: "sarah.chen@gmail.com" → "sa****@gmail.com".
+ *       mirrors ProfileScreen's hero — large centred avatar, name, optional
+ *       bio sub-line, masked email — but omits the Edit-Profile / Settings
+ *       affordances since those only make sense for the current user.
+ *
+ *       The email shown here is the `emailMasked` field on users/{uid} (e.g.
+ *       "1***@test.com"); the unmasked address never leaves Firebase Auth,
+ *       so no client-side masking is needed at this layer.
  * Who: Called by MemoryCircleNavigation for the MemberProfile route.
  * When: Reached by tapping a friend row, search result, request row, group
  *       member, or thumbnail anywhere in the app.
@@ -33,7 +35,7 @@ fun MemberProfileScreen(
     viewModel: MemberProfileViewModel = viewModel()
 ) {
     LaunchedEffect(userId) { viewModel.bind(userId) }
-    val member by viewModel.member.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -45,75 +47,71 @@ fun MemberProfileScreen(
             )
         }
     ) { padding ->
-        val m = member
-        if (m == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                EmptyHint(text = "We couldn't find that user.")
+        when (val s = state) {
+            MemberProfileViewModel.UiState.Loading -> {
+                Box(
+                    modifier         = Modifier.fillMaxSize().padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = Brown)
+                }
             }
-            return@Scaffold
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(40.dp))
-
-            AvatarCircle(name = m.name, size = 120.dp)
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                text  = m.name,
-                style = MaterialTheme.typography.headlineMedium,
-                color = Ink
-            )
-
-            if (m.sharedMemories > 0) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text      = "${m.sharedMemories} shared memories",
-                    style     = MaterialTheme.typography.bodyMedium,
-                    color     = InkSecondary,
-                    textAlign = TextAlign.Center
-                )
+            MemberProfileViewModel.UiState.NotFound -> {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(padding)
+                ) {
+                    EmptyHint(text = "We couldn't find that user.")
+                }
             }
+            is MemberProfileViewModel.UiState.Loaded -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val m = s.info
+                    Spacer(modifier = Modifier.height(40.dp))
 
-            Spacer(modifier = Modifier.height(6.dp))
+                    AvatarCircle(
+                        name     = m.name,
+                        size     = 120.dp,
+                        photoUrl = m.avatarUrl
+                    )
 
-            Text(
-                text      = "✦ ${maskEmail(m.email)}",
-                style     = MaterialTheme.typography.bodyMedium,
-                color     = InkSecondary,
-                textAlign = TextAlign.Center
-            )
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text  = m.name.ifBlank { "User" },
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Ink
+                    )
+
+                    if (m.bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text      = m.bio,
+                            style     = MaterialTheme.typography.bodyMedium,
+                            color     = InkSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (m.emailMasked.isNotBlank()) {
+                        Text(
+                            text      = "✦ ${m.emailMasked}",
+                            style     = MaterialTheme.typography.bodyMedium,
+                            color     = InkSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
         }
     }
-}
-
-/**
- * What: Masks the middle of an email's local part for privacy. Keeps the
- *       first two characters (or one if the local part is shorter), drops
- *       four stars after them, then preserves the @ and domain verbatim.
- *       "sarah.chen@gmail.com" → "sa****@gmail.com".
- *       "a@x.com"               → "a****@x.com".
- *       Strings without a "@" return unchanged — defensive against
- *       malformed input.
- */
-private fun maskEmail(email: String): String {
-    val at = email.indexOf('@')
-    if (at <= 0) return email
-    val local   = email.substring(0, at)
-    val domain  = email.substring(at)
-    val visible = local.take(if (local.length >= 2) 2 else 1)
-    return "$visible****$domain"
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)

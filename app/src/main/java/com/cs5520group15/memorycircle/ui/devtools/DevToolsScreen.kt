@@ -1,7 +1,9 @@
 package com.cs5520group15.memorycircle.ui.devtools
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,9 +31,12 @@ fun DevToolsScreen(
 ) {
     val appContext = LocalContext.current.applicationContext
 
-    val usersState   by viewModel.usersState.collectAsStateWithLifecycle()
-    val postState    by viewModel.postState.collectAsStateWithLifecycle()
-    val historyState by viewModel.historyState.collectAsStateWithLifecycle()
+    val usersState         by viewModel.usersState.collectAsStateWithLifecycle()
+    val postState          by viewModel.postState.collectAsStateWithLifecycle()
+    val historyState       by viewModel.historyState.collectAsStateWithLifecycle()
+    val friendsState       by viewModel.friendsState.collectAsStateWithLifecycle()
+    val profilesState      by viewModel.profilesState.collectAsStateWithLifecycle()
+    val clearProfilesState by viewModel.clearProfilesState.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = Cream,
@@ -47,6 +52,7 @@ fun DevToolsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -78,6 +84,30 @@ fun DevToolsScreen(
                 buttonLabel = "Seed history",
                 state       = historyState,
                 onRun       = { viewModel.seedHistory() }
+            )
+
+            SeedSection(
+                title       = "Befriend 1-5@test.com",
+                description = "Adds 1@test.com through 5@test.com to YOUR friend list (writes both sides of the relationship). 6-10@test.com are intentionally left out so you can test the add-friend flow against them.",
+                buttonLabel = "Seed friendships",
+                state       = friendsState,
+                onRun       = { viewModel.seedFriendships() }
+            )
+
+            SeedSection(
+                title       = "Decorate test users",
+                description = "Patches a themed bio + a stable picsum avatar URL onto every test user (1-10@test.com) so member lists, group avatar collages, and friend rows don't all show the same Sage letter. Also upgrades any old-shape doc to the new public shape (emailMasked).",
+                buttonLabel = "Seed profiles",
+                state       = profilesState,
+                onRun       = { viewModel.seedProfiles() }
+            )
+
+            SeedSection(
+                title       = "Strip test-user profiles",
+                description = "Blanks the bio + avatar on every test user (1-10@test.com) so the demo can show the fresh / undecorated state, or to verify cross-device avatar refresh by running clear → seed and watching every screen update.",
+                buttonLabel = "Clear profiles",
+                state       = clearProfilesState,
+                onRun       = { viewModel.clearProfiles() }
             )
         }
     }

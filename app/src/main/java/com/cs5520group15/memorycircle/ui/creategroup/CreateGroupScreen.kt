@@ -78,12 +78,19 @@ import com.cs5520group15.memorycircle.ui.theme.*
  */
 @Composable
 fun CreateGroupScreen(
-    onBack:       () -> Unit,
-    isInviteMode: Boolean = false,
-    onCreated:    (String) -> Unit = {},
-    onInvite:     (List<String>) -> Unit = {},
-    viewModel:    CreateGroupViewModel = viewModel()
+    onBack:        () -> Unit,
+    isInviteMode:  Boolean = false,
+    targetGroupId: String  = "",
+    onCreated:     (String) -> Unit = {},
+    onInvited:     () -> Unit = {},
+    viewModel:     CreateGroupViewModel = viewModel()
 ) {
+    LaunchedEffect(targetGroupId) {
+        if (isInviteMode && targetGroupId.isNotBlank()) {
+            viewModel.bindInviteTarget(targetGroupId)
+        }
+    }
+
     val contacts    by viewModel.contacts.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
     val query       by viewModel.query.collectAsStateWithLifecycle()
@@ -125,6 +132,7 @@ fun CreateGroupScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is CreateGroupViewModel.CreateGroupEvent.Created      -> onCreated(event.groupId)
+                is CreateGroupViewModel.CreateGroupEvent.Invited      -> onInvited()
                 is CreateGroupViewModel.CreateGroupEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
@@ -136,13 +144,13 @@ fun CreateGroupScreen(
     // back online. We want the user to know up-front that they're offline.
     val onConfirm: () -> Unit = {
         when {
-            isInviteMode -> onInvite(selectedIds.toList())
             !NetworkUtil.isOnline(context) -> {
                 snackScope.launch {
                     snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
                 }
             }
-            else -> viewModel.onCreateClick()
+            isInviteMode -> viewModel.onInviteClick()
+            else         -> viewModel.onCreateClick()
         }
     }
 
@@ -364,7 +372,7 @@ private fun SelectedAvatarPreviews(
 ) {
     if (previews.isEmpty()) return
     previews.forEach { friend ->
-        AvatarCircle(name = friend.name, size = 28.dp)
+        AvatarCircle(name = friend.name, size = 28.dp, photoUrl = friend.avatarUrl)
         Spacer(modifier = Modifier.width(6.dp))
     }
     if (overflow > 0) {
@@ -494,7 +502,7 @@ private fun ContactRow(
     ) {
         SelectionCheckbox(selected = selected, disabled = false)
         Spacer(modifier = Modifier.width(12.dp))
-        AvatarCircle(name = contact.name, size = 44.dp)
+        AvatarCircle(name = contact.name, size = 44.dp, photoUrl = contact.avatarUrl)
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text     = contact.name,
@@ -530,7 +538,7 @@ private fun ResultRow(
         SelectionCheckbox(selected = disabled, disabled = disabled)
         Spacer(modifier = Modifier.width(12.dp))
         Box(modifier = Modifier.alpha(if (disabled) 0.45f else 1f)) {
-            AvatarCircle(name = friend.name, size = 44.dp)
+            AvatarCircle(name = friend.name, size = 44.dp, photoUrl = friend.avatarUrl)
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -646,7 +654,7 @@ fun CreateGroupScreenInvitePreview() {
         CreateGroupScreen(
             onBack       = {},
             isInviteMode = true,
-            onInvite     = {}
+            onInvited    = {}
         )
     }
 }

@@ -5,13 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.data.FirebaseModule
 import com.cs5520group15.memorycircle.data.FriendsRepository
+import com.cs5520group15.memorycircle.data.GroupRepository
 import com.cs5520group15.memorycircle.model.Friend
 import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.YearMonth
@@ -35,22 +39,64 @@ import java.time.YearMonth
  */
 class CreateGroupViewModel : ViewModel() {
 
-    private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
-    private val _query       = MutableStateFlow("")
-    private val _isLoading   = MutableStateFlow(false)
-    private val _groupName   = MutableStateFlow("")
+    // Trigger the friends + groups listeners. CreateGroup can be entered
+    // directly (Home → +) without first hitting FriendsScreen, in which case
+    // FriendsRepository.friends would be empty by default. bind() is
+    // idempotent — if FriendsViewModel.init already ran it, this is a no-op.
+    init { FriendsRepository.bind() }
+
+    private val _selectedIds     = MutableStateFlow<Set<String>>(emptySet())
+    private val _query           = MutableStateFlow("")
+    private val _isLoading       = MutableStateFlow(false)
+    private val _groupName       = MutableStateFlow("")
+    /** uids already in the target group — hidden from the picker in invite
+     *  mode so the user never tries to "invite" someone who's already in. */
+    private val _existingMembers = MutableStateFlow<Set<String>>(emptySet())
 
     val selectedIds: StateFlow<Set<String>> = _selectedIds.asStateFlow()
     val query:       StateFlow<String>      = _query.asStateFlow()
     val isLoading:   StateFlow<Boolean>     = _isLoading.asStateFlow()
     val groupName:   StateFlow<String>      = _groupName.asStateFlow()
 
-    /** Source of contacts the picker offers — the user's existing friend list. */
-    val contacts: StateFlow<List<Friend>> = FriendsRepository.friends
+    /**
+     * Source of contacts the picker offers — the user's friend list, with any
+     * uids already in the target group filtered out (invite mode only; in
+     * create mode `_existingMembers` is empty so nothing is filtered).
+     */
+    val contacts: StateFlow<List<Friend>> =
+        FriendsRepository.friends
+            .combine(_existingMembers) { friends, excluded ->
+                if (excluded.isEmpty()) friends else friends.filterNot { it.id in excluded }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Set once by the screen when isInviteMode = true. Drives the existing-
+     *  member filter and tells onInviteClick which group to write to. */
+    private var targetGroupId: String = ""
+
+    /**
+     * Called by the screen on first composition when isInviteMode = true.
+     * Reads the group's current memberIds so they can be filtered out of the
+     * picker; one-shot read since the picker doesn't need live updates while
+     * the user is choosing.
+     */
+    fun bindInviteTarget(groupId: String) {
+        if (groupId.isBlank() || groupId == targetGroupId) return
+        targetGroupId = groupId
+        viewModelScope.launch {
+            runCatching {
+                val snap = FirebaseModule.db.collection("groups").document(groupId).get().await()
+                @Suppress("UNCHECKED_CAST")
+                val ids = (snap.get("memberIds") as? List<String>) ?: emptyList()
+                _existingMembers.value = ids.toSet()
+            }
+        }
+    }
 
     sealed class CreateGroupEvent {
         data class ShowSnackbar(val message: String) : CreateGroupEvent()
         data class Created(val groupId: String)      : CreateGroupEvent()
+        data class Invited(val count: Int)           : CreateGroupEvent()
     }
 
     private val _events = Channel<CreateGroupEvent>(Channel.BUFFERED)
@@ -117,12 +163,9 @@ class CreateGroupViewModel : ViewModel() {
             val pickedIds    = _selectedIds.value.toList()
             val allMemberIds = (listOf(uid) + pickedIds).distinct()
 
-            // 1) Group document. memberIds IS the membership list — no
-            //    separate members subcollection is created, since `memberIds`
-            //    already carries every uid we'd put in a subdoc and member
-            //    display names are looked up at render time via
-            //    AuthRepository.getUserNames(...). Owner is identified by the
-            //    `ownerId` field rather than a per-doc `role` field.
+            // 1) Group document. `memberIds` drives rules + the array-contains
+            //    queries every screen uses to enumerate a user's groups.
+            //    Owner is identified by `ownerId` rather than a per-doc role.
             groupRef.set(mapOf(
                 "groupId"     to groupId,
                 "name"        to name,
@@ -133,7 +176,25 @@ class CreateGroupViewModel : ViewModel() {
                 "memoryCount" to 0
             )).await()
 
-            // 2) Initial scrapbook for the current month
+            // 2) Members subcollection — denormalized name + avatar per uid so
+            //    GroupDetail / GroupMembers can render with one subcollection
+            //    listener instead of N per-uid users-doc listeners. The briefs
+            //    are batch-resolved off the same users docs the friends list
+            //    already drove this picker from, so this is a single whereIn
+            //    round trip.
+            val briefs = AuthRepository.getUserBriefs(allMemberIds)
+            allMemberIds.forEach { memberUid ->
+                val brief = briefs[memberUid]
+                groupRef.collection("members").document(memberUid).set(mapOf(
+                    "uid"       to memberUid,
+                    "name"      to (brief?.name.orEmpty()),
+                    "avatarUrl" to (brief?.avatarUrl.orEmpty()),
+                    "bio"       to (brief?.bio.orEmpty()),
+                    "joinedAt"  to FieldValue.serverTimestamp()
+                )).await()
+            }
+
+            // 3) Initial scrapbook for the current month
             val scrapbookId = YearMonth.now().toString()
             groupRef.collection("scrapbooks").document(scrapbookId).set(mapOf(
                 "scrapbookId" to scrapbookId,
@@ -147,6 +208,34 @@ class CreateGroupViewModel : ViewModel() {
         } catch (e: Exception) {
             _isLoading.value = false
             _events.send(CreateGroupEvent.ShowSnackbar(e.message ?: "Failed to create group"))
+        }
+    }
+
+    /**
+     * What: arrayUnions the selected uids into the target group's memberIds
+     *       and writes their {name, avatarUrl, bio} member subdocs via
+     *       GroupRepository.inviteMembers. Emits Invited(n) on success so the
+     *       screen can pop back; emits ShowSnackbar on failure.
+     * Who: Called by CreateGroupScreen when the user taps "Invite Now" in
+     *      invite mode.
+     */
+    fun onInviteClick() = viewModelScope.launch {
+        val groupId = targetGroupId
+        if (groupId.isBlank()) {
+            _events.send(CreateGroupEvent.ShowSnackbar("Missing target group"))
+            return@launch
+        }
+        val picked = _selectedIds.value.toList()
+        if (picked.isEmpty()) return@launch
+
+        _isLoading.value = true
+        try {
+            val added = GroupRepository.inviteMembers(groupId, picked)
+            _isLoading.value = false
+            _events.send(CreateGroupEvent.Invited(added))
+        } catch (e: Exception) {
+            _isLoading.value = false
+            _events.send(CreateGroupEvent.ShowSnackbar(e.message ?: "Failed to invite members"))
         }
     }
 }

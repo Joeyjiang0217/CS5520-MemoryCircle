@@ -21,15 +21,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// SwipeToDismissBox lives in material3 (re-exported by the wildcard above),
+// but the threshold helpers + value enum need explicit imports.
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.model.Friend
 import com.cs5520group15.memorycircle.model.FriendRequest
 import com.cs5520group15.memorycircle.model.GroupSummary
 import com.cs5520group15.memorycircle.ui.common.AcceptPill
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.AvatarListRow
+import com.cs5520group15.memorycircle.ui.common.ConfirmDialog
 import com.cs5520group15.memorycircle.ui.common.DeclineCircleButton
 import com.cs5520group15.memorycircle.ui.common.EmptyHint
 import com.cs5520group15.memorycircle.ui.common.GroupRow
@@ -78,10 +85,13 @@ fun FriendsScreen(
             .sortedWith(compareBy { sectionRank(it.first) })
     }
 
-    var selectedTab by rememberSaveable { mutableStateOf(ContactsTab.FRIENDS) }
+    var selectedTab    by rememberSaveable { mutableStateOf(ContactsTab.FRIENDS) }
+    var pendingDeleteId by remember        { mutableStateOf<String?>(null) }
 
-    val listState = rememberLazyListState()
-    val scope     = rememberCoroutineScope()
+    val listState         = rememberLazyListState()
+    val scope             = rememberCoroutineScope()
+    val context           = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val tabBarHeightPx = with(LocalDensity.current) { 54.dp.roundToPx() }
 
@@ -109,6 +119,7 @@ fun FriendsScreen(
 
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             MemoryCircleBottomNav(
                 currentRoute = currentRoute,
@@ -176,28 +187,11 @@ fun FriendsScreen(
                         friendSections.forEach { (letter, list) ->
                             item(key = "section_$letter") { SectionLetter(letter) }
                             items(list, key = { "friend_${it.id}" }) { friend ->
-                                AvatarListRow(
-                                    name     = friend.name,
-                                    subtitle = "${friend.sharedMemories} shared memories",
-                                    isOnline = friend.isOnline,
-                                    onClick  = { onOpenMemberProfile(friend.id) },
-                                    modifier = Modifier.padding(horizontal = 24.dp),
-                                    trailing = {
-                                        if (friend.isOnline) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(Sage.copy(alpha = 0.35f))
-                                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text  = "Active",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = AccentGreen
-                                                )
-                                            }
-                                        }
-                                    }
+                                SwipeableFriendRow(
+                                    friend          = friend,
+                                    pendingDeleteId = pendingDeleteId,
+                                    onClick         = { onOpenMemberProfile(friend.id) },
+                                    onSwipedAway    = { pendingDeleteId = friend.id }
                                 )
                             }
                         }
@@ -213,10 +207,12 @@ fun FriendsScreen(
                         }
                         items(groups, key = { "group_${it.id}" }) { group ->
                             GroupRow(
-                                name        = group.name,
-                                memberCount = group.memberCount,
-                                onClick     = { onOpenGroupDetail(group.id) },
-                                modifier    = Modifier.padding(horizontal = 24.dp)
+                                name             = group.name,
+                                memberCount      = group.memberCount,
+                                memberAvatarUrls = group.memberAvatarUrls,
+                                memberNames      = group.memberNames,
+                                onClick          = { onOpenGroupDetail(group.id) },
+                                modifier         = Modifier.padding(horizontal = 24.dp)
                             )
                         }
                         item(key = "groups_pad") {
@@ -248,6 +244,35 @@ fun FriendsScreen(
                 )
             }
         }
+    }
+
+    val pendingFriend = pendingDeleteId?.let { id -> friends.firstOrNull { it.id == id } }
+    if (pendingFriend != null) {
+        ConfirmDialog(
+            title        = "Remove friend?",
+            message      = "Remove ${pendingFriend.name.ifBlank { "this user" }} from your friend list? " +
+                           "They'll also stop seeing you as a friend.",
+            confirmLabel = "Remove",
+            confirmColor = DeleteRed,
+            onConfirm    = {
+                // Clear pendingDeleteId first so the SwipeToDismissBox snaps
+                // back via the existing LaunchedEffect, regardless of whether
+                // we actually issue the delete. Network gate matches the
+                // GroupDetail destructive ops: offline writes would otherwise
+                // silently queue into Firestore's offline cache and apply
+                // later — which is exactly the bug we just fixed there.
+                val targetId = pendingFriend.id
+                pendingDeleteId = null
+                if (NetworkUtil.isOnline(context)) {
+                    viewModel.deleteFriend(targetId)
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                    }
+                }
+            },
+            onDismiss    = { pendingDeleteId = null }
+        )
     }
 }
 
@@ -491,6 +516,100 @@ private fun IndexEntry(
             text     = label,
             fontSize = 10.sp,
             color    = if (enabled) Brown else BrownDisabled
+        )
+    }
+}
+
+/**
+ * What: One swipeable friend row. Drag-from-end commits the SwipeToDismissBox
+ *       to the EndToStart anchor and fires onSwipedAway, exposing the red
+ *       background. The parent owns the confirmation dialog; when the dialog
+ *       is dismissed (cancel path) the LaunchedEffect resets the swipe so the
+ *       row snaps back. Confirm path triggers the real delete and the row
+ *       leaves the list via the Firestore listener.
+ *
+ *       Subtitle is intentionally blank when sharedMemories == 0 — showing
+ *       "0 shared memories" on a brand-new friend reads as noise (the user
+ *       saw nothing meaningful to count yet).
+ * Who: Called by FriendsScreen.
+ * When: Rendered for every friend on the Friends tab.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableFriendRow(
+    friend:          Friend,
+    pendingDeleteId: String?,
+    onClick:         () -> Unit,
+    onSwipedAway:    () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onSwipedAway()
+                true
+            } else false
+        }
+    )
+
+    // Snap back when this row is no longer the one pending deletion (e.g. the
+    // user cancelled the dialog, or confirmed it and the underlying listener
+    // hasn't republished yet).
+    LaunchedEffect(pendingDeleteId) {
+        val thisRowIsActive = pendingDeleteId == friend.id
+        if (!thisRowIsActive && dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+            dismissState.reset()
+        }
+    }
+
+    SwipeToDismissBox(
+        state                       = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent           = { FriendSwipeBackground() }
+    ) {
+        Box(modifier = Modifier.background(Cream)) {
+            AvatarListRow(
+                name     = friend.name,
+                subtitle = friend.bio,
+                isOnline = friend.isOnline,
+                photoUrl = friend.avatarUrl,
+                onClick  = onClick,
+                modifier = Modifier.padding(horizontal = 24.dp),
+                trailing = {
+                    if (friend.isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Sage.copy(alpha = 0.35f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text  = "Active",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AccentGreen
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FriendSwipeBackground() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DeleteRed)
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Icon(
+            painter            = painterResource(R.drawable.ic_delete),
+            contentDescription = "Remove friend",
+            tint               = Cream,
+            modifier           = Modifier.size(24.dp)
         )
     }
 }

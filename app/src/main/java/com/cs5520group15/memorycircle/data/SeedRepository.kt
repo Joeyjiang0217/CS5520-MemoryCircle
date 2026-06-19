@@ -7,6 +7,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
 import java.time.YearMonth
@@ -17,17 +18,23 @@ import java.util.UUID
  * What: Debug-only helper that pre-populates Firestore so the team can drive
  *       the UI without typing in test data by hand each session.
  *
- *       Three idempotent operations:
- *         1) seedTestUsers()  — register 1@test.com .. 10@test.com (pwd "123456")
- *            on a separate FirebaseApp instance so the caller stays logged in
- *            on the primary app.
- *         2) seedTestPost()   — append one post to the current month's scrapbook
- *            for the current user's first group (or no-op if they have none).
- *         3) seedHistoricalScrapbooks() — create three past-month scrapbooks
- *            (T-1, T-2, T-3) for that same group, each with two seeded posts.
+ *       Idempotent operations behind the Dev Tools screen:
+ *         1) seedTestUsers()             — register 1@test.com .. 10@test.com.
+ *         2) seedTestPost()              — append one post to the current
+ *                                          month's scrapbook for the user's
+ *                                          first group.
+ *         3) seedHistoricalScrapbooks()  — create three past-month scrapbooks.
+ *         4) seedFriendships()           — befriend 1@..5@test.com.
+ *         5) seedTestUserProfiles()      — patch themed bio + avatar onto the
+ *                                          test users, ensuring the new public
+ *                                          shape (emailMasked, no `email`).
+ *         6) clearTestUserProfiles()     — blank bio + avatar on the test
+ *                                          users so the demo can show the
+ *                                          "fresh / undecorated" state.
  *
- *       All writes use FieldValue.serverTimestamp() where applicable so the
- *       data shape exactly matches what the production write paths produce.
+ *       Every write that touches name or avatarUrl also fans out to every
+ *       group the target user belongs to via groups/{gid}/members/{uid}, so
+ *       group screens reflect the change without a restart.
  *
  * Who: Called by the Dev Tools screen.
  * When: Tapped manually by a developer while logged in.
@@ -44,8 +51,8 @@ object SeedRepository {
      * who's running this — isn't signed out by `createUserWithEmailAndPassword`.
      *
      * After each Auth account is minted we also write a matching users/{uid}
-     * Firestore doc (name = "Test User N") so the rest of the app can resolve
-     * display names without dropping back to "User".
+     * Firestore doc using the new public-only shape: name, bio, avatarUrl,
+     * emailMasked (full email lives only in Auth).
      */
     suspend fun seedTestUsers(appContext: Context, count: Int = 10): SeedReport {
         val secondary = secondaryApp(appContext)
@@ -62,12 +69,12 @@ object SeedRepository {
                 val res = auth.createUserWithEmailAndPassword(email, password).await()
                 val uid = res.user!!.uid
                 db.collection("users").document(uid).set(mapOf(
-                    "uid"       to uid,
-                    "name"      to name,
-                    "email"     to email,
-                    "bio"       to "",
-                    "avatarUrl" to "",
-                    "createdAt" to FieldValue.serverTimestamp()
+                    "uid"         to uid,
+                    "name"        to name,
+                    "emailMasked" to AuthRepository.maskEmail(email),
+                    "bio"         to "",
+                    "avatarUrl"   to "",
+                    "createdAt"   to FieldValue.serverTimestamp()
                 )).await()
                 auth.signOut()
                 created++
@@ -84,8 +91,8 @@ object SeedRepository {
 
     /**
      * Adds a single seeded post to the current month's scrapbook of the
-     * current user's first group. Returns the post id, or null with a reason
-     * if there's nothing to write to.
+     * current user's first group. Returns the post id, or throws with a
+     * reason if there's nothing to write to.
      */
     suspend fun seedTestPost(): String {
         val uid = AuthRepository.currentUid ?: error("Not logged in")
@@ -192,7 +199,158 @@ object SeedRepository {
         return written
     }
 
+    /**
+     * Befriends the currently signed-in user with 1@test.com .. 5@test.com.
+     * Writes BOTH sides of each friendship — users/{me}/friends/{friend} AND
+     * users/{friend}/friends/{me} — so the lookups stay symmetric without a
+     * Cloud Function. Returns how many new friendships were created (skipping
+     * pairs that already exist).
+     *
+     * 6@..10@test.com are intentionally left out so you can exercise the
+     * add-friend flow against them.
+     */
+    suspend fun seedFriendships(targetIndices: IntRange = 1..5): Int {
+        val me = AuthRepository.currentUid ?: error("Not logged in")
+
+        val names = targetIndices.map { "Test User $it" }
+        val byName = lookupUidsByName(names)
+        val targetUids = names.mapNotNull { byName[it] }
+        if (targetUids.isEmpty()) {
+            error("Found 0 of the target test users — run 'Seed users' first")
+        }
+
+        var created = 0
+        targetUids.forEach { friendUid ->
+            if (friendUid == me) return@forEach
+            val myRef    = db.collection("users").document(me).collection("friends").document(friendUid)
+            val theirRef = db.collection("users").document(friendUid).collection("friends").document(me)
+            val already  = myRef.get().await().exists()
+            if (already) return@forEach
+            myRef.set(mapOf(
+                "uid"   to friendUid,
+                "since" to FieldValue.serverTimestamp()
+            )).await()
+            theirRef.set(mapOf(
+                "uid"   to me,
+                "since" to FieldValue.serverTimestamp()
+            )).await()
+            created++
+        }
+        return created
+    }
+
+    /**
+     * For users 1@test.com .. 10@test.com (whichever exist), sets a themed bio
+     * + a stable picsum avatar URL so the demo screens don't all show the same
+     * Sage letter blob. Also upgrades any old-shape doc to the new public
+     * shape: writes `emailMasked` and removes the leftover `email` field.
+     *
+     * Every avatar/name change is fanned out to groups/{gid}/members/{uid} so
+     * member listings on other devices refresh without a restart, exactly the
+     * same pattern ProfileRepository uses for self-edits.
+     */
+    suspend fun seedTestUserProfiles(targetIndices: IntRange = 1..10): Int {
+        val names = targetIndices.map { "Test User $it" }
+        val byName = lookupUidsByName(names)
+
+        var patched = 0
+        names.forEach { n ->
+            val uid = byName[n] ?: return@forEach
+            val number = n.substringAfterLast(' ')
+            val bio       = "I'm $n — auto-seeded from Dev Tools."
+            val avatarUrl = "https://picsum.photos/seed/testuser_$number/200/200"
+            val emailMasked = AuthRepository.maskEmail("$number@test.com")
+
+            db.collection("users").document(uid).set(mapOf(
+                "bio"         to bio,
+                "avatarUrl"   to avatarUrl,
+                "emailMasked" to emailMasked,
+                "email"       to FieldValue.delete()
+            ), SetOptions.merge()).await()
+
+            fanOutMemberCard(uid, name = n, avatarUrl = avatarUrl, bio = bio)
+            patched++
+        }
+        return patched
+    }
+
+    /**
+     * Inverse of seedTestUserProfiles: blanks bio + avatarUrl on the test
+     * users so screens fall back to the letter-avatar state. Useful for
+     * demoing "before any user has uploaded a picture", or for confirming the
+     * cross-device update path by running clear → seed and watching every
+     * surface refresh without leaving the screens.
+     *
+     * Fans the cleared avatar/name out to each group's members subcollection
+     * for the same reason as the seed path — otherwise group screens would
+     * keep the previous denormalized values.
+     */
+    suspend fun clearTestUserProfiles(targetIndices: IntRange = 1..10): Int {
+        val names = targetIndices.map { "Test User $it" }
+        val byName = lookupUidsByName(names)
+
+        var cleared = 0
+        names.forEach { n ->
+            val uid = byName[n] ?: return@forEach
+            db.collection("users").document(uid).update(mapOf(
+                "bio"       to "",
+                "avatarUrl" to ""
+            )).await()
+            fanOutMemberCard(uid, name = n, avatarUrl = "", bio = "")
+            cleared++
+        }
+        return cleared
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a map from display name → uid for every users-doc whose `name`
+     * matches one of `names`. Used instead of email-based lookup since email
+     * no longer lives in the public users doc.
+     */
+    private suspend fun lookupUidsByName(names: List<String>): Map<String, String> {
+        if (names.isEmpty()) return emptyMap()
+        val byName = mutableMapOf<String, String>()
+        names.chunked(30).forEach { chunk ->
+            val snap = db.collection("users").whereIn("name", chunk).get().await()
+            snap.documents.forEach { doc ->
+                val name = doc.getString("name") ?: return@forEach
+                byName[name] = doc.id
+            }
+        }
+        return byName
+    }
+
+    /**
+     * Writes the supplied name + avatarUrl into groups/{gid}/members/{uid} for
+     * every group `uid` is currently a member of. Best-effort: individual
+     * failures don't surface. Used by the seed/clear flows where the target
+     * user's app isn't running, so ProfileRepository.fanOutToMyGroupMembers
+     * wouldn't otherwise fire for them.
+     */
+    private suspend fun fanOutMemberCard(uid: String, name: String, avatarUrl: String, bio: String) {
+        try {
+            val snap = db.collection("groups")
+                .whereArrayContains("memberIds", uid)
+                .get().await()
+            snap.documents.forEach { doc ->
+                runCatching {
+                    db.collection("groups").document(doc.id)
+                        .collection("members").document(uid)
+                        .set(mapOf(
+                            "uid"       to uid,
+                            "name"      to name,
+                            "avatarUrl" to avatarUrl,
+                            "bio"       to bio,
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        ), SetOptions.merge()).await()
+                }
+            }
+        } catch (_: Exception) {
+            // Best-effort; the primary users-doc write already succeeded.
+        }
+    }
 
     private suspend fun firstGroupIdFor(uid: String): String? {
         val snap = db.collection("groups")

@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -22,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.data.AuthRepository
+import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.model.Member
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.ConfirmDialog
@@ -30,6 +32,7 @@ import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.common.MonthScrapbookRow
 import com.cs5520group15.memorycircle.ui.common.SectionHeader
 import com.cs5520group15.memorycircle.ui.theme.*
+import kotlinx.coroutines.launch
 
 /**
  * What: A group's "settings/details" page reached from the menu icon on the
@@ -66,6 +69,7 @@ fun GroupDetailScreen(
     val members   by viewModel.members.collectAsStateWithLifecycle()
     val months    by viewModel.months.collectAsStateWithLifecycle()
     val isOwner   by viewModel.isOwner.collectAsStateWithLifecycle()
+    val isWorking by viewModel.isWorking.collectAsStateWithLifecycle()
     val currentUid = remember { AuthRepository.currentUid }
 
     var showLeaveDialog       by remember { mutableStateOf(false) }
@@ -77,8 +81,43 @@ fun GroupDetailScreen(
     // problem when users just want to tap through to a member profile.
     var inMembersEditMode     by remember { mutableStateOf(false) }
 
+    val context           = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackScope        = rememberCoroutineScope()
+
+    // Surface VM-side write failures (e.g. Firestore rejected the kick) as
+    // snackbars. Network-offline rejections happen earlier at the click site
+    // and never reach the VM, so this channel is mostly for "rare server
+    // errors after a confirmed online attempt".
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is GroupDetailViewModel.GroupDetailEvent.ShowSnackbar ->
+                    snackbarHostState.showSnackbar(event.message)
+            }
+        }
+    }
+
+    /**
+     * Gate every destructive write through this helper. If the device is
+     * offline, show a snackbar and abort — otherwise Firestore would silently
+     * queue the write into its offline-persistence cache and "succeed", which
+     * is the bug pattern we just hit (kick/delete/leave going through even
+     * with airplane mode on, then syncing later).
+     */
+    fun runOnline(block: () -> Unit) {
+        if (NetworkUtil.isOnline(context)) {
+            block()
+        } else {
+            snackScope.launch {
+                snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+            }
+        }
+    }
+
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         topBar = {
             MemoryCircleTopBar(
                 title    = "",
@@ -176,7 +215,7 @@ fun GroupDetailScreen(
             confirmColor = Brown,
             onConfirm    = {
                 showLeaveDialog = false
-                viewModel.leaveGroup(onDone = onLeftGroup)
+                runOnline { viewModel.leaveGroup(onDone = onLeftGroup) }
             },
             onDismiss    = { showLeaveDialog = false }
         )
@@ -191,7 +230,7 @@ fun GroupDetailScreen(
             confirmColor = DeleteRed,
             onConfirm    = {
                 showDeleteGroupDialog = false
-                viewModel.deleteGroup(onDone = onLeftGroup)
+                runOnline { viewModel.deleteGroup(onDone = onLeftGroup) }
             },
             onDismiss    = { showDeleteGroupDialog = false }
         )
@@ -205,11 +244,27 @@ fun GroupDetailScreen(
             confirmLabel = "Remove",
             confirmColor = DeleteRed,
             onConfirm    = {
-                viewModel.kickMember(member.id)
                 memberToKick = null
+                runOnline { viewModel.kickMember(member.id) }
             },
             onDismiss    = { memberToKick = null }
         )
+    }
+
+    // Modal spinner overlay while kick/leave/delete is in flight. The Box
+    // catches taps so the user can't fire a second destructive action mid-
+    // delete; visually a centered CircularProgressIndicator over a semi-
+    // transparent ink scrim.
+    if (isWorking) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Ink.copy(alpha = 0.25f))
+                .clickable(enabled = true) { /* swallow taps */ },
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = Brown)
+        }
     }
 }
 

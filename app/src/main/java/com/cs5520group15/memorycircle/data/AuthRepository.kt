@@ -31,7 +31,13 @@ object AuthRepository {
 
     /**
      * Creates a Firebase Auth account with email + password, then writes a
-     * matching users/{uid} document with the display name.
+     * matching users/{uid} document.
+     *
+     * The full email is held only by Firebase Auth — the public users doc gets
+     * `emailMasked` (e.g. "j***@example.com") so any signed-in user can render
+     * a friend / member row without exposing addresses to the broader signed-in
+     * audience. The signed-in user reads their own real email via
+     * FirebaseAuth.currentUser.email.
      */
     suspend fun register(name: String, email: String, password: String): Result<String> {
         return try {
@@ -39,12 +45,12 @@ object AuthRepository {
             val uid = authResult.user!!.uid
 
             val userDoc = mapOf(
-                "uid"       to uid,
-                "name"      to name,
-                "email"     to email,
-                "bio"       to "",
-                "avatarUrl" to "",
-                "createdAt" to FieldValue.serverTimestamp()
+                "uid"         to uid,
+                "name"        to name,
+                "emailMasked" to maskEmail(email),
+                "bio"         to "",
+                "avatarUrl"   to "",
+                "createdAt"   to FieldValue.serverTimestamp()
             )
             db.collection("users").document(uid).set(userDoc).await()
 
@@ -82,24 +88,15 @@ object AuthRepository {
         auth.signOut()
     }
 
-    // ── Profile name lookup ──────────────────────────────────────────────────
+    // ── Profile lookup ───────────────────────────────────────────────────────
 
     /**
      * What: A user's render-time identity — display name and avatar download
-     *       URL — surfaced together so callers (group members list, post
-     *       author rows, comment rows) get both fields in one Firestore round
-     *       trip instead of querying for them separately.
+     *       URL — surfaced together so callers (scrapbook author rows, group
+     *       creation flows, etc.) get both fields in one Firestore round trip
+     *       instead of querying for them separately.
      */
-    data class UserBrief(val name: String, val avatarUrl: String)
-
-    /**
-     * Process-wide cache of uid -> (name, avatarUrl). Avoids re-reading
-     * users/{uid} every time we need to render an author / member row.
-     * Cleared automatically when the process dies; renames or avatar uploads
-     * during a session surface lazily as new lookups happen — the editor's own
-     * profile updates instantly via ProfileRepository's live listener.
-     */
-    private val briefCache = mutableMapOf<String, UserBrief>()
+    data class UserBrief(val name: String, val avatarUrl: String, val bio: String = "")
 
     /**
      * Reads the current user's display name from Firestore.
@@ -116,22 +113,13 @@ object AuthRepository {
     }
 
     /**
-     * What: Single-uid display-name lookup. Hits the in-memory brief cache
-     *       first; on miss reads users/{uid} (both name + avatarUrl in one
-     *       round trip) and caches the result.
-     * Who:  Used wherever only the name is needed (HomeScreen greeting,
-     *       CreateGroup owner member subdoc seed).
+     * Single-uid name lookup via a one-shot users/{uid} read. Surfaces wherever
+     * only the name is needed (HomeScreen greeting, etc.).
      */
     suspend fun getUserName(uid: String): String? {
-        briefCache[uid]?.let { return it.name }
         return try {
             val doc = db.collection("users").document(uid).get().await()
-            val name = doc.getString("name") ?: return null
-            briefCache[uid] = UserBrief(
-                name      = name,
-                avatarUrl = doc.getString("avatarUrl").orEmpty()
-            )
-            name
+            doc.getString("name")
         } catch (e: Exception) {
             null
         }
@@ -146,48 +134,57 @@ object AuthRepository {
         getUserBriefs(uids).mapValues { it.value.name }
 
     /**
-     * What: Batched (uid → name + avatarUrl) lookup. Returns a map covering
-     *       every input id whose users doc exists; missing/unknown ids are
-     *       absent. Uncached ids are fetched in chunks of 30 (Firestore's
-     *       whereIn limit) via whereIn(documentId(), …) and added to the
-     *       cache.
-     * Who:  Used by GroupDetailViewModel / GroupMembersViewModel to render
-     *       member avatars, and by ScrapbookRepository.assemble() to attach
-     *       avatars to post / comment / photo authors at read time.
-     * When: One call per snapshot refresh on the consumer; the cache absorbs
-     *       repeated lookups so a timeline of N posts costs at most
-     *       ceil(uniqueAuthors / 30) round trips.
+     * What: One-shot batched (uid → name + avatarUrl) lookup via whereIn on
+     *       documentId. Returns a map covering every input id whose users doc
+     *       exists; missing ids are absent. Chunked at 30 to respect Firestore's
+     *       whereIn limit.
+     * Who:  Used by ScrapbookRepository.assemble() to attach author identity
+     *       to post / photo / comment rows at read time.
+     * When: One call per assemble pass. No caching — assemble happens inside a
+     *       snapshot listener so each fire reads fresh values; for surfaces
+     *       that need live name/avatar updates (Friends list, group members)
+     *       the consumer attaches its own snapshot listener instead.
      */
     suspend fun getUserBriefs(uids: List<String>): Map<String, UserBrief> {
-        val unique = uids.toSet()
+        val unique = uids.distinct().filter { it.isNotBlank() }
+        if (unique.isEmpty()) return emptyMap()
+
         val result = mutableMapOf<String, UserBrief>()
-        val missing = mutableListOf<String>()
-
-        unique.forEach { uid ->
-            val cached = briefCache[uid]
-            if (cached != null) result[uid] = cached else missing += uid
-        }
-
-        if (missing.isEmpty()) return result
-
-        missing.chunked(30).forEach { chunk ->
+        unique.chunked(30).forEach { chunk ->
             try {
                 val snap = db.collection("users")
                     .whereIn(FieldPath.documentId(), chunk)
                     .get().await()
                 snap.documents.forEach { doc ->
                     val name = doc.getString("name") ?: return@forEach
-                    val brief = UserBrief(
+                    result[doc.id] = UserBrief(
                         name      = name,
-                        avatarUrl = doc.getString("avatarUrl").orEmpty()
+                        avatarUrl = doc.getString("avatarUrl").orEmpty(),
+                        bio       = doc.getString("bio").orEmpty()
                     )
-                    briefCache[doc.id] = brief
-                    result[doc.id] = brief
                 }
             } catch (_: Exception) {
                 // Best-effort: missing entries simply don't appear in the map.
             }
         }
         return result
+    }
+
+    /**
+     * What: Privacy mask for emails written into the public users doc as
+     *       `emailMasked`. Keeps the first character of the local part, drops
+     *       three stars after it, preserves @ + domain verbatim. Strings
+     *       without an @ are returned unchanged — defensive against malformed
+     *       input.
+     *
+     *       "1@test.com"          → "1***@test.com"
+     *       "john.doe@gmail.com"  → "j***@gmail.com"
+     */
+    fun maskEmail(email: String): String {
+        val at = email.indexOf('@')
+        if (at <= 0) return email
+        val local  = email.substring(0, at)
+        val domain = email.substring(at)
+        return "${local.first()}***$domain"
     }
 }

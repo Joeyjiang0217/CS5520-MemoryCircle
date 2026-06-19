@@ -164,9 +164,10 @@ fun MemoryCircleNavigation() {
         composable<CreateGroup> { entry ->
             val args = entry.toRoute<CreateGroup>()
             CreateGroupScreen(
-                onBack       = { navController.popBackStack() },
-                isInviteMode = args.isInviteMode,
-                onCreated    = { newGroupId ->
+                onBack        = { navController.popBackStack() },
+                isInviteMode  = args.isInviteMode,
+                targetGroupId = args.targetGroupId,
+                onCreated     = { newGroupId ->
                     // Pop the picker off the back stack before landing on the
                     // new group's timeline so the system Back button returns
                     // to Home, not back into the contact picker.
@@ -174,10 +175,11 @@ fun MemoryCircleNavigation() {
                         popUpTo<CreateGroup> { inclusive = true }
                     }
                 },
-                onInvite     = { _ ->
-                    // Invite-confirm: actual member-add wiring against the
-                    // parent group's repository lands in a follow-up turn.
-                    // For now just unwind to GroupDetail.
+                onInvited     = {
+                    // Invite-confirm: members were arrayUnioned into the parent
+                    // group and their subdocs written by the VM. Just unwind
+                    // back to GroupDetail — its listeners will pick up the
+                    // new memberIds + members subcollection entries.
                     navController.popBackStack()
                 }
             )
@@ -298,7 +300,12 @@ fun MemoryCircleNavigation() {
                 onBack              = { navController.popBackStack() },
                 onOpenAllMembers    = { navController.navigate(GroupMembers(detail.groupId)) },
                 onOpenMemberProfile = { userId -> navController.navigate(MemberProfile(userId)) },
-                onInviteMember      = { navController.navigate(CreateGroup(isInviteMode = true)) },
+                onInviteMember      = {
+                    navController.navigate(CreateGroup(
+                        isInviteMode  = true,
+                        targetGroupId = detail.groupId
+                    ))
+                },
                 onOpenScrapbook     = { gid, month, year ->
                     navController.navigate(ScrapbookHistory(gid, month, year))
                 },

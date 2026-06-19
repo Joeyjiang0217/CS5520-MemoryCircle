@@ -8,9 +8,11 @@ import com.cs5520group15.memorycircle.data.GroupRepository
 import com.cs5520group15.memorycircle.model.Member
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.YearMonth
@@ -22,15 +24,16 @@ import java.util.Locale
  *       flat member list (used both as thumbnails and as the "view all" roster),
  *       and the list of per-month scrapbook entries that belong to this group.
  *
- *       Two live Firestore subscriptions:
- *         - groups/{gid}        → name + memberIds (members list is derived
- *                                 from the array; the uids are batch-resolved
- *                                 to display names via AuthRepository).
+ *       Three live Firestore subscriptions:
+ *         - groups/{gid}            → name, ownerId (drives isOwner gate).
+ *         - groups/{gid}/members    → denormalized {name, avatarUrl, joinedAt}
+ *                                     per member. One listener replaces the
+ *                                     old per-uid users-doc resolution; cross-
+ *                                     device updates arrive via the fan-out
+ *                                     ProfileRepository writes when each user
+ *                                     edits their own profile.
  *         - groups/{gid}/scrapbooks → per-month timeline list.
  *
- *       There is no separate members subcollection — `memberIds` IS the
- *       membership source of truth and member display names are looked up at
- *       read time, same convention as posts/comments.
  * Who: Used by GroupDetailScreen.
  * When: Created when the screen is shown for a specific groupId; survives
  *       config changes. Listeners detached in onCleared().
@@ -57,6 +60,9 @@ class GroupDetailViewModel : ViewModel() {
     private val _members   = MutableStateFlow<List<Member>>(emptyList())
     private val _months    = MutableStateFlow<List<MonthScrapbook>>(emptyList())
     private val _isOwner   = MutableStateFlow(false)
+    /** True while a kick / leave / delete write is in flight. The screen shows
+     *  a spinner overlay so the user can't double-tap the destructive action. */
+    private val _isWorking = MutableStateFlow(false)
 
     val groupName: StateFlow<String>              = _groupName.asStateFlow()
     val members:   StateFlow<List<Member>>        = _members.asStateFlow()
@@ -64,10 +70,21 @@ class GroupDetailViewModel : ViewModel() {
     /** True when the current logged-in user is the group's owner. Used by the
      *  screen to show owner-only affordances (kick member, delete group). */
     val isOwner:   StateFlow<Boolean>             = _isOwner.asStateFlow()
+    val isWorking: StateFlow<Boolean>             = _isWorking.asStateFlow()
+
+    /** One-shot snackbar messages — currently used for "operation failed"
+     *  errors from kick/leave/delete writes. Network pre-checks live in the
+     *  screen layer (we don't want to drag Context into the VM). */
+    sealed class GroupDetailEvent {
+        data class ShowSnackbar(val message: String) : GroupDetailEvent()
+    }
+    private val _events = Channel<GroupDetailEvent>(Channel.BUFFERED)
+    val events = _events.receiveAsFlow()
 
     private var boundGroupId: String? = null
 
     private var groupListener:      ListenerRegistration? = null
+    private var membersListener:    ListenerRegistration? = null
     private var scrapbooksListener: ListenerRegistration? = null
 
     private val monthFormatter = DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)
@@ -85,38 +102,51 @@ class GroupDetailViewModel : ViewModel() {
         boundGroupId = groupId
         detachAll()
 
+        // Back-fill any uid in memberIds that doesn't yet have a members/{uid}
+        // subdoc — covers legacy groups created before the denormalized
+        // members subcollection existed, and the owner's own subdoc on groups
+        // that pre-date their first profile edit. Fire-and-forget; the
+        // membersListener picks up the writes.
+        viewModelScope.launch {
+            runCatching { GroupRepository.reconcileMembers(groupId) }
+        }
+
         val db        = FirebaseModule.db
         val groupRef  = db.collection("groups").document(groupId)
         val colorType = "brown"   // fallback color for scrapbook rows
 
-        // 1) Group main doc — pull `name`, derive members from memberIds, and
-        //    flag whether the current user is the owner so the screen can
-        //    surface owner-only affordances.
+        // 1) Group main doc — name + ownerId. The members LIST itself now
+        //    comes from the members subcollection listener below; we keep the
+        //    main-doc listener only for the fields the subcollection doesn't
+        //    carry.
         groupListener = groupRef.addSnapshotListener { snap, err ->
             if (err != null || snap == null) return@addSnapshotListener
             _groupName.value = snap.getString("name") ?: "Untitled"
-
             val ownerId = snap.getString("ownerId")
             _isOwner.value = ownerId != null && ownerId == AuthRepository.currentUid
-
-            @Suppress("UNCHECKED_CAST")
-            val uids = (snap.get("memberIds") as? List<String>) ?: emptyList()
-            viewModelScope.launch {
-                val briefs = AuthRepository.getUserBriefs(uids)
-                _members.value = uids.map { uid ->
-                    val brief = briefs[uid]
-                    Member(
-                        id             = uid,
-                        name           = brief?.name ?: "Member",
-                        sharedMemories = 0,
-                        isOnline       = false,
-                        avatarUrl      = brief?.avatarUrl.orEmpty()
-                    )
-                }
-            }
         }
 
-        // 2) Scrapbooks subcollection — newest month first (doc id "YYYY-MM").
+        // 2) Members subcollection — single listener delivers every member's
+        //    denormalized name + avatar; cross-device profile edits propagate
+        //    via the fan-out ProfileRepository performs on save.
+        membersListener = groupRef.collection("members")
+            .addSnapshotListener { snap, err ->
+                if (err != null || snap == null) return@addSnapshotListener
+                _members.value = snap.documents
+                    .map { doc ->
+                        Member(
+                            id             = doc.id,
+                            name           = doc.getString("name").orEmpty(),
+                            sharedMemories = 0,
+                            isOnline       = false,
+                            avatarUrl      = doc.getString("avatarUrl").orEmpty(),
+                            bio            = doc.getString("bio").orEmpty()
+                        )
+                    }
+                    .sortedBy { it.name.lowercase() }
+            }
+
+        // 3) Scrapbooks subcollection — newest month first (doc id "YYYY-MM").
         //    Each snapshot is republished twice: once immediately with whatever
         //    thumbnails are already cached, then again after we've resolved any
         //    missing / stale thumbnails (mirrors MemoriesViewModel.rebuild()).
@@ -188,9 +218,13 @@ class GroupDetailViewModel : ViewModel() {
     fun leaveGroup(onDone: () -> Unit) {
         val groupId = boundGroupId ?: return
         val uid = AuthRepository.currentUid ?: return
+        if (_isWorking.value) return
         viewModelScope.launch {
+            _isWorking.value = true
             runCatching { GroupRepository.leaveGroup(groupId, uid) }
                 .onSuccess { onDone() }
+                .onFailure { _events.send(GroupDetailEvent.ShowSnackbar(it.message ?: "Failed to leave group")) }
+            _isWorking.value = false
         }
     }
 
@@ -215,27 +249,34 @@ class GroupDetailViewModel : ViewModel() {
     fun kickMember(memberUid: String) {
         val groupId = boundGroupId ?: return
         if (!_isOwner.value) return
+        if (_isWorking.value) return
         viewModelScope.launch {
+            _isWorking.value = true
             runCatching { GroupRepository.kickMember(groupId, memberUid) }
+                .onFailure { _events.send(GroupDetailEvent.ShowSnackbar(it.message ?: "Failed to remove member")) }
+            _isWorking.value = false
         }
     }
 
     /**
      * Owner-only: delete the entire group. Same caveat as kickMember re: rules.
-     * Subcollections (scrapbooks) and Storage photos are not cascaded — a
-     * Cloud Function would handle that in production.
      */
     fun deleteGroup(onDone: () -> Unit) {
         val groupId = boundGroupId ?: return
         if (!_isOwner.value) return
+        if (_isWorking.value) return
         viewModelScope.launch {
+            _isWorking.value = true
             runCatching { GroupRepository.deleteGroup(groupId) }
                 .onSuccess { onDone() }
+                .onFailure { _events.send(GroupDetailEvent.ShowSnackbar(it.message ?: "Failed to delete group")) }
+            _isWorking.value = false
         }
     }
 
     private fun detachAll() {
-        groupListener?.remove();      groupListener = null
+        groupListener?.remove();      groupListener      = null
+        membersListener?.remove();    membersListener    = null
         scrapbooksListener?.remove(); scrapbooksListener = null
     }
 

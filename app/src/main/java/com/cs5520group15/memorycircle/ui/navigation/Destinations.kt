@@ -80,8 +80,12 @@ import kotlinx.serialization.Serializable
 // Re-used as the "invite new members" surface when reached from GroupDetail's
 // invite tile: isInviteMode flips the top-bar title and CTA label, and the
 // nav layer routes the confirm action back to the parent group instead of
-// minting a new ScrapbookViewer destination.
-@Serializable data class CreateGroup(val isInviteMode: Boolean = false)
+// minting a new ScrapbookViewer destination. `targetGroupId` carries the
+// group we're inviting into when isInviteMode = true (empty otherwise).
+@Serializable data class CreateGroup(
+    val isInviteMode:  Boolean = false,
+    val targetGroupId: String  = ""
+)
 
 // A group's members page — opened from the "View all members" link on GroupDetail
 @Serializable data class GroupMembers(val groupId: String)

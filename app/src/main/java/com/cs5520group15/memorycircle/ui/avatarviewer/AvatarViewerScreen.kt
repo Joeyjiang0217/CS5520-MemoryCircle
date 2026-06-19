@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -18,6 +19,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
+import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.data.ProfileRepository
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
@@ -47,8 +49,9 @@ fun AvatarViewerScreen(
     var uploading   by remember { mutableStateOf(false) }
     var errorText   by remember { mutableStateOf<String?>(null) }
 
-    val scope = rememberCoroutineScope()
+    val scope             = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context           = LocalContext.current
 
     // System PhotoPicker — no extra runtime permission needed on Android 13+.
     val pickMedia = rememberLauncherForActivityResult(
@@ -109,9 +112,19 @@ fun AvatarViewerScreen(
         AvatarActionMenu(
             onPickFromAlbum = {
                 showActions = false
-                pickMedia.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
+                // Gate the photo picker on connectivity so the user doesn't
+                // pick + crop only to have the upload silently queue into
+                // Firestore's offline cache. Matches WeChat / QQ — avatar
+                // edits are blocked offline.
+                if (NetworkUtil.isOnline(context)) {
+                    pickMedia.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                } else {
+                    scope.launch {
+                        snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                    }
+                }
             },
             onCancel = { showActions = false }
         )

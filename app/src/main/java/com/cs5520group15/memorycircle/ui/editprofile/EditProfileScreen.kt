@@ -7,11 +7,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.Chevron
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
@@ -19,6 +21,7 @@ import com.cs5520group15.memorycircle.ui.common.RowDivider
 import com.cs5520group15.memorycircle.ui.common.SettingsRow
 import com.cs5520group15.memorycircle.ui.common.brandFieldColors
 import com.cs5520group15.memorycircle.ui.theme.*
+import kotlinx.coroutines.launch
 
 /**
  * What: Profile-editing form — one row per editable field (name, bio, email)
@@ -41,8 +44,29 @@ fun EditProfileScreen(
 
     var editingField by remember { mutableStateOf<EditField?>(null) }
 
+    val context           = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackScope        = rememberCoroutineScope()
+
+    /**
+     * Gate every profile write through this helper. If offline, show a
+     * snackbar and abort — same rationale as GroupDetail: Firestore would
+     * otherwise queue the write into its offline cache and "succeed" without
+     * network. WeChat / QQ also block profile edits offline; matching that.
+     */
+    fun runOnline(block: () -> Unit) {
+        if (NetworkUtil.isOnline(context)) {
+            block()
+        } else {
+            snackScope.launch {
+                snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+            }
+        }
+    }
+
     Scaffold(
         containerColor = Cream,
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         topBar = {
             MemoryCircleTopBar(
                 title    = "Profile",
@@ -104,12 +128,14 @@ fun EditProfileScreen(
                 EditField.EMAIL -> profile.email
             },
             onSave = { value ->
-                when (active) {
-                    EditField.NAME  -> viewModel.updateName(value)
-                    EditField.BIO   -> viewModel.updateBio(value)
-                    EditField.EMAIL -> viewModel.updateEmail(value)
-                }
                 editingField = null
+                runOnline {
+                    when (active) {
+                        EditField.NAME  -> viewModel.updateName(value)
+                        EditField.BIO   -> viewModel.updateBio(value)
+                        EditField.EMAIL -> viewModel.updateEmail(value)
+                    }
+                }
             },
             onDismiss = { editingField = null }
         )

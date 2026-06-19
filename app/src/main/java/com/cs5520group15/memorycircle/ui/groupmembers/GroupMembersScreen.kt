@@ -74,7 +74,7 @@ fun GroupMembersScreen(
                 items(members, key = { it.id }) { member ->
                     AvatarListRow(
                         name       = member.name,
-                        subtitle   = "${member.sharedMemories} shared memories",
+                        subtitle   = member.bio,
                         isOnline   = member.isOnline,
                         avatarSize = 48.dp,
                         photoUrl   = member.avatarUrl,
