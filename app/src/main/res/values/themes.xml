@@ -2,4 +2,12 @@
 <resources>
 
     <style name="Theme.MemoryCircle" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash screen shown at cold start; hands off to Theme.MemoryCircle once the app is ready. -->
+    <style name="Theme.MemoryCircle.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="windowSplashScreenBackground">#F8F4EE</item>
+        <item name="windowSplashScreenIconBackgroundColor">#F8F4EE</item>
+        <item name="postSplashScreenTheme">@style/Theme.MemoryCircle</item>
+    </style>
 </resources>

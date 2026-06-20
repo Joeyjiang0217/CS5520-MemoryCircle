@@ -59,6 +59,9 @@ dependencies {
     // Image loading
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // Splash screen
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
 // Pager (HorizontalPager)
     implementation("androidx.compose.foundation:foundation:1.7.0")
 

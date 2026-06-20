@@ -18,6 +18,10 @@ import kotlinx.serialization.Serializable
 
 // object = a singleton route with no arguments
 // Used for screens that don't need any data passed in
+
+// Branded launch splash — the start destination. Auto-advances to the auth
+// flow (Login) or Home after its intro animation completes.
+@Serializable object Splash
 @Serializable object Login
 @Serializable object Register
 @Serializable object Home

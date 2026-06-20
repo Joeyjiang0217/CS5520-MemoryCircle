@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.cs5520group15.memorycircle.data.AuthRepository
 import com.cs5520group15.memorycircle.ui.addfriend.AddFriendScreen
+import com.cs5520group15.memorycircle.ui.auth.SplashScreen
 import com.cs5520group15.memorycircle.ui.addfriendsearch.AddFriendSearchScreen
 import com.cs5520group15.memorycircle.ui.avatarviewer.AvatarViewerScreen
 import com.cs5520group15.memorycircle.ui.creategroup.CreateGroupScreen
@@ -78,15 +79,28 @@ fun MemoryCircleNavigation() {
         }
     }
 
-    // Auth persistence: if Firebase already has a signed-in user (cached on
-    // disk by the SDK across app restarts), skip Login and land on Home.
-    val startDestination: Any =
+    // Where the splash hands off once its intro animation finishes. Auth
+    // persistence: if Firebase already has a signed-in user (cached on disk by
+    // the SDK across app restarts), skip Login and land on Home.
+    val postSplashDestination: Any =
         if (AuthRepository.currentUid != null) Home else Login
 
     NavHost(
         navController    = navController,
-        startDestination = startDestination
+        startDestination = Splash
     ) {
+
+        composable<Splash> {
+            SplashScreen(
+                onTimeout = {
+                    navController.navigate(postSplashDestination) {
+                        // Drop the splash from the back stack so Back doesn't
+                        // return to it.
+                        popUpTo(Splash) { inclusive = true }
+                    }
+                }
+            )
+        }
 
         composable<Login> {
             LoginScreen(
