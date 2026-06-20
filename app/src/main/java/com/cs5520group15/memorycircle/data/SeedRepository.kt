@@ -252,14 +252,19 @@ object SeedRepository {
             val theirRef = db.collection("users").document(friendUid).collection("friends").document(me)
             val already  = myRef.get().await().exists()
             if (already) return@forEach
-            myRef.set(mapOf(
-                "uid"   to friendUid,
-                "since" to FieldValue.serverTimestamp()
-            )).await()
-            theirRef.set(mapOf(
-                "uid"   to me,
-                "since" to FieldValue.serverTimestamp()
-            )).await()
+            // Batch both sides: if either write fails (e.g. rules deny the
+            // cross-user mirror write), the whole pair rolls back — no
+            // asymmetric "friend on my side, not on theirs" leak.
+            db.runBatch { batch ->
+                batch.set(myRef, mapOf(
+                    "uid"   to friendUid,
+                    "since" to FieldValue.serverTimestamp()
+                ))
+                batch.set(theirRef, mapOf(
+                    "uid"   to me,
+                    "since" to FieldValue.serverTimestamp()
+                ))
+            }.await()
             created++
         }
         return created
@@ -508,8 +513,16 @@ object SeedRepository {
             ?: error("$joinName not found — run 'Seed users' first")
         if (joinerUid == me) error("You can't join your own group as another user")
 
+        // Pick the most-recently-created group I own. Firestore returns docs
+        // in undefined order without an explicit orderBy, so a bare limit(1)
+        // would silently bounce between owned groups across runs — making
+        // "already a member" errors confusing because the user can't tell
+        // which group the function actually picked. Sorting by createdAt
+        // pins the choice to the newest group, matching the user's mental
+        // model of "the one I just created".
         val ownedSnap = db.collection("groups")
             .whereEqualTo("ownerId", me)
+            .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .limit(1)
             .get().await()
         val groupDoc = ownedSnap.documents.firstOrNull()
@@ -518,7 +531,9 @@ object SeedRepository {
 
         @Suppress("UNCHECKED_CAST")
         val currentMembers = (groupDoc.get("memberIds") as? List<String>).orEmpty()
-        if (joinerUid in currentMembers) error("$joinName is already in this group")
+        if (joinerUid in currentMembers) {
+            error("$joinName is already in group $gid")
+        }
 
         val groupRef = db.collection("groups").document(gid)
         groupRef.update(mapOf(

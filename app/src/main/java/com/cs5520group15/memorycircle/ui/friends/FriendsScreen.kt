@@ -563,35 +563,30 @@ private fun SwipeableFriendRow(
     onClick:         () -> Unit,
     onSwipedAway:    () -> Unit
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onSwipedAway()
-                true
-            } else false
-        }
-    )
-
-    // The reset has two timelines:
-    //   - explicit dialog cancel / confirm → animate (smooth snap-back)
-    //   - row entering composition with a stale dismiss value preserved by
-    //     the LazyColumn / nav back stack → snap silently so the user doesn't
-    //     see a phantom animation play on their way back into the screen.
-    //
-    // `hasInteracted` flips on the first observed transition INTO this row's
-    // pending-delete slot, so cancellation-driven resets after that point
-    // keep their animation.
-    var hasInteracted by remember { mutableStateOf(false) }
+    // Material3's SwipeToDismissBox state can get into a stuck mode after
+    // a single uncommitted gesture: snapTo(Settled) visually puts the row
+    // back, but the internal anchor history won't accept a second swipe.
+    // Workaround: throw the whole state away and rebuild it whenever the
+    // row "leaves" the pending-delete slot (cancel / confirm / another row
+    // takes over). `resetKey` is the trigger; key(resetKey) {...} forces
+    // rememberSwipeToDismissBoxState to recompose with a fresh instance.
+    var resetKey  by remember { mutableIntStateOf(0) }
+    var wasActive by remember { mutableStateOf(false) }
     LaunchedEffect(pendingDeleteId) {
-        val thisRowIsActive = pendingDeleteId == friend.id
-        if (thisRowIsActive) hasInteracted = true
-        if (!thisRowIsActive && dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-            if (hasInteracted) {
-                dismissState.reset()
-            } else {
-                dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+        val isActive = pendingDeleteId == friend.id
+        if (wasActive && !isActive) resetKey++
+        wasActive = isActive
+    }
+
+    val dismissState = key(resetKey) {
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) {
+                    onSwipedAway()
+                    true
+                } else false
             }
-        }
+        )
     }
 
     SwipeToDismissBox(

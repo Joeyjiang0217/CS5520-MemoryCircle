@@ -1,0 +1,174 @@
+rules_version = '2';
+
+// Memory Circle — Firestore security rules
+//
+// Permission model
+//   users/{uid}                                 any auth read; owner write
+//   users/{uid}/friends/{friendUid}             owner read; owner OR friend write
+//   users/{uid}/incomingRequests/{fromUid}      owner read+delete; sender create+delete
+//   users/{uid}/outgoingRequests/{toUid}        owner read/write; acceptor delete
+//   groups/{gid}                                member read; auth create; member update; owner delete
+//   groups/{gid}/members/{memberUid}            member read+write
+//   groups/{gid}/scrapbooks/{sid}/**            member read+write
+//
+// Why "friend OR me" on friend docs: deleteFriend / acceptIncomingRequests
+// write both sides of the relationship in one batch, so each user's
+// counterpart row has to be writable by the other side of the pair.
+//
+// isDeveloper() is an opt-in escape hatch for the DevTools "Seed profiles"
+// / "Clear profiles" / "Accept for User 6" / "Simulate ..." actions,
+// which write across user boundaries by design. Leave the list empty in
+// production. To enable, paste your UID (from Firebase Console →
+// Authentication → Users) into the array below.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+    function isMe(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+    function isDeveloper() {
+      return isAuth() && request.auth.uid in [
+        // "PASTE_YOUR_OWN_UID_HERE"
+        "iCBqngD1l9czSHcZoqWmuvySUCl1",   // joe
+        "q2mVhRh1S3dHonS2AqXEgxs21wN2"    // rena
+      ];
+    }
+    function groupDoc(gid) {
+      return get(/databases/$(database)/documents/groups/$(gid)).data;
+    }
+    function isGroupMember(gid) {
+      return isAuth() && request.auth.uid in groupDoc(gid).memberIds;
+    }
+    function isGroupOwner(gid) {
+      return isAuth() && request.auth.uid == groupDoc(gid).ownerId;
+    }
+
+    // ── Users ───────────────────────────────────────────────────────────
+    // Public fields (name, avatarUrl, bio, emailMasked, emailHash) need to
+    // be readable by any signed-in user: friend search, member rows, post
+    // author rows, etc. Only the owner edits — full email lives only in
+    // Firebase Auth so it's never exposed here.
+    match /users/{uid} {
+      allow read:           if isAuth();
+      allow create, update: if isMe(uid) || isDeveloper();
+      allow delete:         if isDeveloper();
+
+      // Friend list. Each entry is doc-id-keyed by the OTHER uid.
+      //   - owner manages their own list (add/remove)
+      //   - the "other side" can write its own mirror row, which lets
+      //     deleteFriend tear down both sides and acceptIncomingRequests
+      //     create both sides in a single batch — gated on an ACCEPTED
+      //     incoming request so a malicious client can't unilaterally inject
+      //     themselves into someone's friends list
+      //   - dev override keeps the DevTools "Seed friendships" flow alive
+      match /friends/{friendUid} {
+        allow read: if isMe(uid) || isDeveloper();
+
+        allow create: if isMe(uid)
+                   || (isMe(friendUid)
+                       && exists(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid))
+                       && get(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid)).data.status == 'ACCEPTED')
+                   || isDeveloper();
+
+        allow delete: if isMe(uid) || isMe(friendUid) || isDeveloper();
+      }
+
+      // Incoming friend requests.
+      //   - sender creates (must key by their own uid, status must start
+      //     PENDING, actionedAt must be absent → blocks "A pretends B
+      //     accepted them")
+      //   - owner reads + deletes (accept/reject)
+      //   - sender can delete their own pending outgoing request
+      //   - no updates: requests are append-or-delete, no state machine
+      //   - dev override powers DevTools "Simulate friend request" which
+      //     writes the incoming side on behalf of a sender that isn't
+      //     signed in on this device
+      match /incomingRequests/{fromUid} {
+        allow read: if isMe(uid) || isDeveloper();
+
+        allow create: if (isMe(fromUid)
+                          && (!('status' in request.resource.data)
+                              || request.resource.data.status == 'PENDING')
+                          && (!('actionedAt' in request.resource.data)
+                              || request.resource.data.actionedAt == null))
+                      || isDeveloper();
+
+        // Sender re-send keeps the same "no forging accept-side fields"
+        // shape. Receiver is trusted on their own inbox doc.
+        allow update: if (isMe(fromUid)
+                          && (!('status' in request.resource.data)
+                              || request.resource.data.status == 'PENDING')
+                          && (!('actionedAt' in request.resource.data)
+                              || request.resource.data.actionedAt == null))
+                      || isMe(uid)
+                      || isDeveloper();
+
+        allow delete: if isMe(uid) || isMe(fromUid) || isDeveloper();
+      }
+
+      // Outgoing friend requests — owner manages, plus the recipient
+      // (toUid) can delete when accepting (acceptIncomingRequests).
+      // Dev override powers "Simulate friend request" which has to seed
+      // the sender's outgoing entry too.
+      match /outgoingRequests/{toUid} {
+        allow read:           if isMe(uid) || isDeveloper();
+        allow create, update: if isMe(uid) || isDeveloper();
+        allow delete:         if isMe(uid) || isMe(toUid) || isDeveloper();
+      }
+    }
+
+    // ── Groups ──────────────────────────────────────────────────────────
+    // Membership is gated on the memberIds array on the group doc itself.
+    // Reads are scoped to members so a non-member can't enumerate a group
+    // they shouldn't see. Create requires the caller to put themselves in
+    // both ownerId AND memberIds — prevents creating ghost groups they're
+    // not in. Updates (rename, invite via arrayUnion, leave via
+    // arrayRemove) are open to any member; the kick action is gated
+    // client-side, not by rules — tighten before production. Dev override
+    // on create powers "Simulate group invite from Test User N" which
+    // mints a group owned by someone other than the signed-in dev.
+    match /groups/{gid} {
+      allow read:   if (isAuth() && request.auth.uid in resource.data.memberIds)
+                    || isDeveloper();
+
+      allow create: if (isAuth()
+                        && request.resource.data.ownerId == request.auth.uid
+                        && request.auth.uid in request.resource.data.memberIds)
+                    || isDeveloper();
+
+      allow update: if (isAuth() && request.auth.uid in resource.data.memberIds)
+                    || isDeveloper();
+
+      allow delete: if isGroupOwner(gid) || isDeveloper();
+
+      // Denormalized member cards (name, avatarUrl, bio, joinedAt). Any
+      // group member can read or write — needed for CreateGroup to seed
+      // the subcollection, ProfileRepository to fan out edits, and
+      // GroupRepository.kickMember to delete kicked members' rows.
+      match /members/{memberUid} {
+        allow read:                   if isGroupMember(gid) || isDeveloper();
+        allow create, update, delete: if isGroupMember(gid) || isDeveloper();
+      }
+
+      // Scrapbook timeline. Members can read AND write — posting a memory
+      // is a member-level action, not author-only. The author check lives
+      // in the client; rules just enforce membership.
+      match /scrapbooks/{sid} {
+        allow read, write: if isGroupMember(gid) || isDeveloper();
+
+        match /posts/{pid} {
+          allow read, write: if isGroupMember(gid) || isDeveloper();
+
+          match /comments/{cid} {
+            allow read, write: if isGroupMember(gid) || isDeveloper();
+          }
+        }
+      }
+    }
+  }
+}
