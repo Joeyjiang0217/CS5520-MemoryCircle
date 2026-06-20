@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Profile screen.
+ * Who:  Used by ProfileScreen.
+ * When: Created when ProfileScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.profile
 
 import androidx.lifecycle.ViewModel

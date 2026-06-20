@@ -1,3 +1,13 @@
+/**
+ * What: Live source of truth for the friend list, the friend-request queue, the
+ *       group list on the Friends tab, plus the add-friend search and the
+ *       send / accept / decline / delete friend-request actions, all over Firestore.
+ * Who: Used by FriendsViewModel, FriendsSearchViewModel, AddFriendSearchViewModel,
+ *       AllFriendRequestsViewModel, and CreateGroupViewModel.
+ * When: bind() is called from those ViewModels' init blocks to attach the
+ *       listeners; they detach on logout or when no user is signed in.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import com.cs5520group15.memorycircle.model.Friend

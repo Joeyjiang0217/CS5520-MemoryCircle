@@ -1,3 +1,15 @@
+/**
+ * What: Write-side group helpers in Firestore — member reconciliation, invite,
+ *       leave (with deterministic ownership transfer), kick, rename, and the
+ *       cascade-delete that walks scrapbooks / posts / comments / members /
+ *       Storage when a group is removed.
+ * Who: Used by GroupDetailViewModel, GroupMembersViewModel, and
+ *       CreateGroupViewModel.
+ * When: Invoked from those ViewModels when a member acts on a group — on bind
+ *       (reconcileMembers) or on an explicit invite / leave / kick / rename /
+ *       delete tap.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.util.Log

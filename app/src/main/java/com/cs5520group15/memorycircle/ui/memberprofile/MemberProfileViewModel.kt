@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Member Profile screen.
+ * Who:  Used by MemberProfileScreen.
+ * When: Created when MemberProfileScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.memberprofile
 
 import androidx.lifecycle.ViewModel

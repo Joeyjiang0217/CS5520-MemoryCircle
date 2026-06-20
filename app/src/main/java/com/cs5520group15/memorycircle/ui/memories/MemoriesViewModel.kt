@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Memories screen.
+ * Who:  Used by MemoriesScreen.
+ * When: Created when MemoriesScreen is first composed; survives configuration changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.memories
 
 import androidx.lifecycle.ViewModel

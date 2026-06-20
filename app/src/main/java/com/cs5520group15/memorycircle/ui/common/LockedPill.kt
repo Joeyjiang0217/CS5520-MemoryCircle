@@ -1,3 +1,9 @@
+/**
+ * What: Non-interactive disabled pill for terminal states ("Invitation sent", "Accepted").
+ * Who:  Used by AllFriendRequestsScreen and AddFriendSearchScreen.
+ * When: Composed in a row's trailing slot once the action is no longer available.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

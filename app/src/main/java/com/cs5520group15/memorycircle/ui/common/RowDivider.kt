@@ -1,3 +1,9 @@
+/**
+ * What: A thin horizontal divider line styled to match the app's settings/list rows.
+ * Who:  Used by SettingsScreen, EditProfileScreen, ProfileScreen, and NotificationSettingsScreen.
+ * When: Composed between consecutive SettingsRow items to separate them.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.material3.HorizontalDivider

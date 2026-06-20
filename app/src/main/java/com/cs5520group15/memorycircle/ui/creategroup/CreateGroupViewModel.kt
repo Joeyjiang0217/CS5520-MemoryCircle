@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Create Group screen.
+ * Who:  Used by CreateGroupScreen.
+ * When: Created when CreateGroupScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.creategroup
 
 import androidx.lifecycle.ViewModel

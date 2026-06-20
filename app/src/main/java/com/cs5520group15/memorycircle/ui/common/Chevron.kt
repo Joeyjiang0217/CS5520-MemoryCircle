@@ -1,3 +1,9 @@
+/**
+ * What: Right-pointing chevron glyph hinting that a row drills in on tap.
+ * Who:  Used by EditProfileScreen rows (and any tappable navigation row).
+ * When: Composed as a trailing affordance at the end of a tappable row.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.size

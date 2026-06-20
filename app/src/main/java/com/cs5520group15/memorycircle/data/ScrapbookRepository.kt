@@ -1,3 +1,14 @@
+/**
+ * What: Firestore-backed store for each group's scrapbook timeline — a live
+ *       per-group flow of posts, photos, and comments, plus the add-post /
+ *       add-comment / edit / photo-upload writes and one-shot month reads.
+ * Who: Used by ScrapbookViewModel, ScrapbookViewerViewModel,
+ *       ScrapbookViewerScreen, and ScrapbookHistoryScreen.
+ * When: entriesFor(groupId) attaches the current-month listener on first use
+ *       (when a group's scrapbook is opened); loadMonthEntries does a one-shot
+ *       read when a past month is viewed.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.net.Uri

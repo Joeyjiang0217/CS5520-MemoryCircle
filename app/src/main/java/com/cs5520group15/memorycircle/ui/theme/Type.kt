@@ -1,3 +1,11 @@
+/**
+ * What: The app's font families (Cormorant Garamond, DM Sans) and the
+ *       MemoryCircleTypography text-style scale built from them.
+ * Who:  Used by Theme.kt to set MaterialTheme.typography; styles are then read
+ *       by every composable via MaterialTheme.typography.
+ * When: Resolved at composition time wherever a typography style is read.
+ */
+
 package com.cs5520group15.memorycircle.ui.theme
 
 import androidx.compose.material3.Typography

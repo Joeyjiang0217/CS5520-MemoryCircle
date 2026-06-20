@@ -1,3 +1,9 @@
+/**
+ * What: Main-app bottom navigation bar with Home, Memories, Friends, and Profile tabs.
+ * Who:  Used by HomeScreen, MemoriesScreen, FriendsScreen, and ProfileScreen.
+ * When: Composed in each main screen's Scaffold bottom bar after login.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.material3.Icon

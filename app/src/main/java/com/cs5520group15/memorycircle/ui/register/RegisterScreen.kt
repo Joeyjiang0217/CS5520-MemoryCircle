@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Register screen — collects new-account details
+ *       and creates the account, with a link back to login.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached pre-auth from
+ *       LoginScreen via its "navigate to register" action.
+ * When: Composed when the user navigates to the Register route from Login.
+ */
+
 package com.cs5520group15.memorycircle.ui.register
 
 import androidx.compose.foundation.background

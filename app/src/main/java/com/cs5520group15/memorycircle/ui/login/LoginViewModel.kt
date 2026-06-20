@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Login screen.
+ * Who:  Used by LoginScreen.
+ * When: Created when LoginScreen is first composed; survives configuration changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.login
 
 import androidx.lifecycle.ViewModel

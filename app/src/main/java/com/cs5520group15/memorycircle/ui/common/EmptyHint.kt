@@ -1,3 +1,10 @@
+/**
+ * What: Centred muted text used as the empty-state placeholder for a list.
+ * Who:  Used by FriendsScreen, AllFriendRequestsScreen, AddFriendSearchScreen,
+ *       FriendsSearchScreen, CreateGroupScreen, and the scrapbook screens.
+ * When: Composed in place of a list when there is nothing to show.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.Box

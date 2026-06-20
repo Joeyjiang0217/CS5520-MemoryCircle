@@ -1,3 +1,12 @@
+/**
+ * What: Jetpack Compose UI for the Home screen — the post-login landing surface
+ *       showing the user's groups with create/open actions.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached as the start
+ *       destination after a successful login/register or when a session is restored.
+ * When: Composed when the user navigates to the Home route (the start destination
+ *       when a signed-in user is present).
+ */
+
 package com.cs5520group15.memorycircle.ui.home
 
 import androidx.compose.foundation.layout.*
@@ -36,6 +45,34 @@ fun HomeScreen(
     val userName by viewModel.userName.collectAsStateWithLifecycle()
     val profile  by viewModel.profile.collectAsStateWithLifecycle()
 
+    HomeContent(
+        groups        = groups,
+        userName      = userName,
+        avatarUrl     = profile.avatarUrl,
+        currentRoute  = currentRoute,
+        onNavigate    = onNavigate,
+        onCreateGroup = onCreateGroup,
+        onOpenGroup   = onOpenGroup
+    )
+}
+
+/**
+ * What: Stateless content of the Home screen — renders the greeting, recent
+ *       groups list, and bottom navigation purely from its parameters, so it
+ *       can be shown in a @Preview without constructing a (Firebase-backed) ViewModel.
+ * Who:  Used by HomeScreen, which supplies the live ViewModel-backed state.
+ * When: Composed by HomeScreen on every recomposition.
+ */
+@Composable
+private fun HomeContent(
+    groups:        List<HomeViewModel.Group>,
+    userName:      String,
+    avatarUrl:     String,
+    currentRoute:  String,
+    onNavigate:    (Any) -> Unit,
+    onCreateGroup: () -> Unit,
+    onOpenGroup:   (String) -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         bottomBar = {
@@ -86,7 +123,7 @@ fun HomeScreen(
                         Text("✦", color = Ink)
                     }
                 }
-                AvatarCircle(name = userName, size = 44.dp, photoUrl = profile.avatarUrl)
+                AvatarCircle(name = userName, size = 44.dp, photoUrl = avatarUrl)
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -128,11 +165,29 @@ fun HomeScreen(
 @Composable
 fun HomeScreenPreview() {
     MemoryCircleTheme {
-        HomeScreen(
-            currentRoute   = "home",
-            onNavigate     = {},
-            onCreateGroup  = {},
-            onOpenGroup    = {}
+        HomeContent(
+            groups = listOf(
+                HomeViewModel.Group(
+                    id          = "g1",
+                    name        = "Summer Trip",
+                    date        = "5 members",
+                    memoryCount = 12,
+                    colorType   = "brown"
+                ),
+                HomeViewModel.Group(
+                    id          = "g2",
+                    name        = "Family",
+                    date        = "3 members",
+                    memoryCount = 7,
+                    colorType   = "sage"
+                )
+            ),
+            userName      = "Ada",
+            avatarUrl     = "",
+            currentRoute  = "home",
+            onNavigate    = {},
+            onCreateGroup = {},
+            onOpenGroup   = {}
         )
     }
 }

@@ -1,3 +1,9 @@
+/**
+ * What: Generic avatar + name + subtitle + optional trailing row for people lists.
+ * Who:  Used by FriendsScreen, GroupMembersScreen, AddFriendSearchScreen, and FriendsSearchScreen.
+ * When: Composed for each person in a friends/members/search list.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

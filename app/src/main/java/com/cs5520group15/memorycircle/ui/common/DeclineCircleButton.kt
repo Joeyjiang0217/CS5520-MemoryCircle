@@ -1,3 +1,9 @@
+/**
+ * What: Small neutral-grey round close button for declining a pending friend request.
+ * Who:  Used by FriendsScreen and AllFriendRequestsScreen.
+ * When: Composed next to the Accept pill in a pending friend-request row.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

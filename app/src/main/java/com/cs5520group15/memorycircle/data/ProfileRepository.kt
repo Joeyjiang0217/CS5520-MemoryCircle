@@ -1,3 +1,13 @@
+/**
+ * What: Live users/{uid} subscription backing the signed-in user's profile —
+ *       name, bio, masked email, avatar — plus the write paths that update
+ *       those fields and fan them out into each group's members subcollection.
+ * Who: Used by ProfileViewModel, EditProfileViewModel, GroupDetailViewModel,
+ *       GroupMembersViewModel, HomeViewModel, and AvatarViewerScreen.
+ * When: bind() is called from those ViewModels' init blocks; the listener
+ *       survives until logout, when a different uid rebinds.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.net.Uri

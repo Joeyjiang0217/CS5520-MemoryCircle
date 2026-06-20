@@ -1,3 +1,9 @@
+/**
+ * What: A small uppercase label that titles a section of content.
+ * Who:  Used by HomeScreen, ScrapbookScreen, GroupDetailScreen, FriendsScreen, and FriendsSearchScreen.
+ * When: Composed above a group of related rows or fields to label that section.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.Arrangement

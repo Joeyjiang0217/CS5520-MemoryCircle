@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Scrapbook History screen, showing a group's scrapbook
+ *       entries for a given month and year.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation under the ScrapbookHistory route;
+ *       reached from MemoriesScreen and GroupDetailScreen by opening a scrapbook.
+ * When: Composed when the user navigates to the ScrapbookHistory destination.
+ */
+
 package com.cs5520group15.memorycircle.ui.scrapbookhistory
 
 import androidx.compose.foundation.background
@@ -283,6 +291,79 @@ fun ScrapbookHistoryScreenPreview() {
             month   = "March",
             year    = "2025",
             onBack  = {}
+        )
+    }
+}
+
+private val historyPreviewPhoto = Photo(
+    photoId = "p1",
+    url = "",
+    storagePath = "",
+    description = "Sunset at the lake",
+    uploaderId = "u1",
+    uploaderName = "Ada",
+    uploaderAvatarUrl = ""
+)
+
+private val historyPreviewComment = Comment(
+    id = "c1",
+    authorId = "u1",
+    authorName = "Ada Lovelace",
+    authorAvatarUrl = "",
+    text = "So much fun!"
+)
+
+private val historyPreviewEntry = ScrapbookEntry(
+    id = "e1",
+    authorId = "u1",
+    authorName = "Ada Lovelace",
+    authorAvatarUrl = "",
+    date = "June 1",
+    title = "Lakeside Picnic",
+    tags = listOf("food", "park"),
+    photos = listOf(historyPreviewPhoto),
+    comments = listOf(historyPreviewComment),
+    commentCount = 1
+)
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun HistoryTimelineEntryPreview() {
+    MemoryCircleTheme {
+        HistoryTimelineEntry(
+            entry = historyPreviewEntry
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun HistoryMemoryCardPreview() {
+    MemoryCircleTheme {
+        HistoryMemoryCard(
+            entry = historyPreviewEntry
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun HistoryPhotoBlockPreview() {
+    MemoryCircleTheme {
+        HistoryPhotoBlock(
+            photo = historyPreviewPhoto,
+            fallbackName = "Ada Lovelace",
+            fallbackAvatarUrl = ""
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun HistoryCommentRowPreview() {
+    MemoryCircleTheme {
+        HistoryCommentRow(
+            comment = historyPreviewComment
         )
     }
 }

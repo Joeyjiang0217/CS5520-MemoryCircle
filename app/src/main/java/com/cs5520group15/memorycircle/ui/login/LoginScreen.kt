@@ -1,3 +1,12 @@
+/**
+ * What: Jetpack Compose UI for the Login screen — collects credentials and signs
+ *       the user in, with a link out to registration.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached pre-auth as the
+ *       start destination when no signed-in user is present.
+ * When: Composed when the user navigates to the Login route (the start destination
+ *       when no session exists).
+ */
+
 package com.cs5520group15.memorycircle.ui.login
 
 import androidx.compose.foundation.background
@@ -292,6 +301,18 @@ private fun ForgotPasswordDialog(
             }
         }
     )
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ForgotPasswordDialogPreview() {
+    MemoryCircleTheme {
+        ForgotPasswordDialog(
+            initialEmail = "ada@example.com",
+            onDismiss    = {},
+            onSend       = {}
+        )
+    }
 }
 
 @Preview(showBackground = true)

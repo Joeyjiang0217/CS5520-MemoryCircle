@@ -1,3 +1,11 @@
+/**
+ * What: The app's shared top app bar, with an optional back button, centered title,
+ *       and trailing action slot.
+ * Who:  Used by most full screens, including SettingsScreen, EditProfileScreen,
+ *       GroupDetailScreen, and ScrapbookScreen.
+ * When: Composed at the top of a screen's Scaffold whenever that screen is shown.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.RowScope

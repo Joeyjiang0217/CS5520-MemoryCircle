@@ -1,3 +1,13 @@
+/**
+ * What: Debug-only tooling that pre-populates Firestore (test users,
+ *       friendships, posts, historical scrapbooks, themed profiles) and
+ *       simulates real friend-request / group / post / photo / comment writes
+ *       so the live NotificationsRepository listeners fire on demand.
+ * Who: Used by DevToolsViewModel (driven from DevToolsScreen).
+ * When: Invoked when a developer taps an action on the Dev Tools screen while
+ *       signed in.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.content.Context

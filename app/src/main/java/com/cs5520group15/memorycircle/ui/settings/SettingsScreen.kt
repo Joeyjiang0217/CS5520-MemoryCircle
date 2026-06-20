@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Settings screen — entry point to profile editing,
+ *       notification settings, dev tools, and logout.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached from ProfileScreen
+ *       via its "open settings" action.
+ * When: Composed when the user navigates to the Settings route from Profile.
+ */
+
 package com.cs5520group15.memorycircle.ui.settings
 
 import androidx.compose.foundation.layout.*

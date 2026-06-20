@@ -1,3 +1,10 @@
+/**
+ * What: Jetpack Compose UI for the Avatar Viewer screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the AvatarViewer
+ *       route; reached from the Edit Profile screen when opening the avatar.
+ * When: Composed when the user navigates to the AvatarViewer route.
+ */
+
 package com.cs5520group15.memorycircle.ui.avatarviewer
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -159,6 +166,17 @@ private fun AvatarActionMenu(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AvatarActionMenuPreview() {
+    MemoryCircleTheme {
+        AvatarActionMenu(
+            onPickFromAlbum = {},
+            onCancel        = {}
+        )
+    }
+}
+
 @Composable
 private fun ActionRow(
     label:    String,
@@ -176,6 +194,17 @@ private fun ActionRow(
             text  = label,
             style = MaterialTheme.typography.labelLarge,
             color = if (emphasis) Brown else Ink
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ActionRowPreview() {
+    MemoryCircleTheme {
+        ActionRow(
+            label   = "Choose from album",
+            onClick = {}
         )
     }
 }

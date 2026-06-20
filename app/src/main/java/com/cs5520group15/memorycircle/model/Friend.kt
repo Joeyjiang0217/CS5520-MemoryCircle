@@ -1,3 +1,12 @@
+/**
+ * What: Data models for the Friends tab — a friend list entry (Friend), a
+ *       received friend request (FriendRequest), and a group reference
+ *       (GroupSummary).
+ * Who:  Used by FriendsRepository, FriendsSearchViewModel, and the Friends screens.
+ * When: Instantiated whenever the friend list, request list, or group list is
+ *       rebuilt from Firestore plus the user-briefs cache.
+ */
+
 package com.cs5520group15.memorycircle.model
 
 /**

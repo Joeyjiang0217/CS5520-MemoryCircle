@@ -1,3 +1,10 @@
+/**
+ * What: Branded confirmation modal with a destructive-tinted confirm button.
+ * Who:  Used by SettingsScreen (Logout), GroupDetailScreen (Leave), AllFriendRequestsScreen,
+ *       and FriendsScreen.
+ * When: Composed while the parent screen's confirmation-dialog state is true.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.shape.RoundedCornerShape

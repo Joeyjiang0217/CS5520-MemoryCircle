@@ -1,3 +1,9 @@
+/**
+ * What: The app's primary call-to-action button, with an optional in-button loading spinner.
+ * Who:  Used by LoginScreen, RegisterScreen, ScrapbookScreen, CreateGroupScreen, and DevToolsScreen.
+ * When: Composed as the main submit/confirm action at the bottom of a form or screen.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.fillMaxWidth

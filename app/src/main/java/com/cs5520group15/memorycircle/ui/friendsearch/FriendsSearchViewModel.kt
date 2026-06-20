@@ -1,3 +1,11 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Friends Search
+ *       screen.
+ * Who:  Used by FriendsSearchScreen.
+ * When: Created when FriendsSearchScreen is first composed; survives config
+ *       changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.friendsearch
 
 import androidx.lifecycle.ViewModel

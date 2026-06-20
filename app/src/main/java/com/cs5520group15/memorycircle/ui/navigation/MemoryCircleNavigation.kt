@@ -1,3 +1,12 @@
+/**
+ * What: The NavHost composable that wires every screen into the app navigation
+ *       graph and owns the shared NavController.
+ * Who:  Called once by MainActivity inside MemoryCircleTheme; it in turn hosts
+ *       all the ui screen composables.
+ * When: Composed at app startup and recomposed as the back stack changes for
+ *       the lifetime of the Activity.
+ */
+
 package com.cs5520group15.memorycircle.ui.navigation
 
 import androidx.compose.runtime.Composable

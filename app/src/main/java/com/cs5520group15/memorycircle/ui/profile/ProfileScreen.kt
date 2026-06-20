@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Profile screen — the current user's profile
+ *       tab landing screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the Profile route;
+ *       reached by selecting the Profile tab in the bottom navigation bar.
+ * When: Composed when the user navigates to the Profile route.
+ */
+
 package com.cs5520group15.memorycircle.ui.profile
 
 import androidx.compose.foundation.layout.*
@@ -41,6 +49,36 @@ fun ProfileScreen(
 ) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
 
+    ProfileContent(
+        name              = profile.name,
+        bio               = profile.bio,
+        email             = profile.email,
+        avatarUrl         = profile.avatarUrl,
+        currentRoute      = currentRoute,
+        onNavigate        = onNavigate,
+        onOpenEditProfile = onOpenEditProfile,
+        onOpenSettings    = onOpenSettings
+    )
+}
+
+/**
+ * What: Stateless content of the Profile screen — renders the avatar, name, bio,
+ *       email, edit CTA, and settings row purely from its parameters, so it can
+ *       be shown in a @Preview without constructing a (Firebase-backed) ViewModel.
+ * Who:  Used by ProfileScreen, which supplies the live ViewModel-backed profile.
+ * When: Composed by ProfileScreen on every recomposition.
+ */
+@Composable
+private fun ProfileContent(
+    name:              String,
+    bio:               String,
+    email:             String,
+    avatarUrl:         String,
+    currentRoute:      String,
+    onNavigate:        (Any) -> Unit,
+    onOpenEditProfile: () -> Unit,
+    onOpenSettings:    () -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         bottomBar = {
@@ -60,15 +98,15 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             AvatarCircle(
-                name     = profile.name,
+                name     = name,
                 size     = 120.dp,
-                photoUrl = profile.avatarUrl
+                photoUrl = avatarUrl
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text  = profile.name,
+                text  = name,
                 style = MaterialTheme.typography.headlineMedium,
                 color = Ink
             )
@@ -78,15 +116,15 @@ fun ProfileScreen(
             // Bio is optional. Show a soft placeholder for brand-new users so
             // the layout doesn't visually collapse the moment they sign up.
             Text(
-                text      = profile.bio.ifBlank { "Tap Edit Profile to add a bio." },
+                text      = bio.ifBlank { "Tap Edit Profile to add a bio." },
                 style     = MaterialTheme.typography.bodyMedium,
-                color     = if (profile.bio.isBlank()) InkTertiary else InkSecondary,
+                color     = if (bio.isBlank()) InkTertiary else InkSecondary,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text      = "✦ ${profile.email}",
+                text      = "✦ $email",
                 style     = MaterialTheme.typography.bodyMedium,
                 color     = InkSecondary,
                 textAlign = TextAlign.Center
@@ -115,7 +153,11 @@ fun ProfileScreen(
 @Composable
 fun ProfileScreenPreview() {
     MemoryCircleTheme {
-        ProfileScreen(
+        ProfileContent(
+            name              = "Ada Lovelace",
+            bio               = "Loves hiking and old maps.",
+            email             = "ada@example.com",
+            avatarUrl         = "",
             currentRoute      = "profile",
             onNavigate        = {},
             onOpenEditProfile = {},

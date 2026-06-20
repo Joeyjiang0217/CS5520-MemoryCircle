@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Friends Search screen — full-screen search
+ *       over the user's existing friends and groups.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the FriendsSearch
+ *       route; reached from FriendsScreen via its onOpenSearch callback.
+ * When: Composed when the user navigates to the FriendsSearch route.
+ */
+
 package com.cs5520group15.memorycircle.ui.friendsearch
 
 import androidx.compose.foundation.background
@@ -261,6 +269,59 @@ fun FriendsSearchScreenPreview() {
             onCancel             = {},
             onOpenMemberProfile  = {},
             onOpenGroupDetail    = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun RecentSearchesPreview() {
+    MemoryCircleTheme {
+        RecentSearches(
+            recent = listOf("ada", "grace"),
+            onRecentTap = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun RecentChipPreview() {
+    MemoryCircleTheme {
+        RecentChip(
+            text = "ada",
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ResultsListPreview() {
+    MemoryCircleTheme {
+        ResultsList(
+            friends = listOf(
+                Friend(
+                    id = "u1",
+                    name = "Ada Lovelace",
+                    email = "ada@example.com",
+                    sharedMemories = 4,
+                    isOnline = true,
+                    avatarUrl = "",
+                    bio = ""
+                )
+            ),
+            groups = listOf(
+                GroupSummary(
+                    id = "g1",
+                    name = "Summer Trip",
+                    memberCount = 5,
+                    memberAvatarUrls = emptyList(),
+                    memberNames = listOf("Ada", "Grace")
+                )
+            ),
+            onFriendTap = {},
+            onGroupTap = {}
         )
     }
 }

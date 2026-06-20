@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Dev Tools screen — developer utilities such as
+ *       seeding test data.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached from SettingsScreen
+ *       via its "open dev tools" action.
+ * When: Composed when the user navigates to the DevTools route from Settings.
+ */
+
 package com.cs5520group15.memorycircle.ui.devtools
 
 import androidx.compose.foundation.layout.*
@@ -9,12 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.common.PrimaryButton
 import com.cs5520group15.memorycircle.ui.theme.*
+import com.cs5520group15.memorycircle.ui.theme.MemoryCircleTheme
 
 /**
  * What: Debug-only utility page. Three buttons run the SeedRepository
@@ -182,6 +192,14 @@ fun DevToolsScreen(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun DevToolsScreenPreview() {
+    MemoryCircleTheme {
+        DevToolsScreen(onBack = {})
+    }
+}
+
 @Composable
 private fun SeedSection(
     title:       String,
@@ -210,6 +228,20 @@ private fun SeedSection(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SeedSectionPreview() {
+    MemoryCircleTheme {
+        SeedSection(
+            title       = "Seed Users",
+            description = "Create sample user accounts",
+            buttonLabel = "Run",
+            state       = DevToolsViewModel.ActionState.Idle,
+            onRun       = {}
+        )
+    }
+}
+
 @Composable
 private fun ResultLine(state: DevToolsViewModel.ActionState) {
     val (text, color) = when (state) {
@@ -221,5 +253,13 @@ private fun ResultLine(state: DevToolsViewModel.ActionState) {
     if (text.isEmpty()) return
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ResultLinePreview() {
+    MemoryCircleTheme {
+        ResultLine(state = DevToolsViewModel.ActionState.Success("Seeded 10 users"))
     }
 }

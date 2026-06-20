@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Scrapbook Viewer screen, showing a group's timeline
+ *       of scrapbook entries.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation under the ScrapbookViewer route;
+ *       reached from HomeScreen (opening a group) and after creating a group in CreateGroupScreen.
+ * When: Composed when the user navigates to the ScrapbookViewer destination.
+ */
+
 package com.cs5520group15.memorycircle.ui.scrapbookviewer
 
 import androidx.compose.foundation.background
@@ -393,6 +401,85 @@ fun ScrapbookViewerScreenPreview() {
             onOpenGroupDetail = {},
             onAddTimePoint    = {},
             onJoinEntry       = {}
+        )
+    }
+}
+
+private val previewPhoto = Photo(
+    photoId = "p1",
+    url = "",
+    storagePath = "",
+    description = "Sunset at the lake",
+    uploaderId = "u1",
+    uploaderName = "Ada",
+    uploaderAvatarUrl = ""
+)
+
+private val previewComment = Comment(
+    id = "c1",
+    authorId = "u1",
+    authorName = "Ada Lovelace",
+    authorAvatarUrl = "",
+    text = "So much fun!"
+)
+
+private val previewEntry = ScrapbookEntry(
+    id = "e1",
+    authorId = "u1",
+    authorName = "Ada Lovelace",
+    authorAvatarUrl = "",
+    date = "June 1",
+    title = "Lakeside Picnic",
+    tags = listOf("food", "park"),
+    photos = listOf(previewPhoto),
+    comments = listOf(previewComment),
+    commentCount = 1
+)
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun TimelineEntryPreview() {
+    MemoryCircleTheme {
+        TimelineEntry(
+            entry = previewEntry,
+            onSaveTitle = {},
+            onPostComment = {},
+            onJoin = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun MemoryCardPreview() {
+    MemoryCircleTheme {
+        MemoryCard(
+            entry = previewEntry,
+            onSaveTitle = {},
+            onPostComment = {},
+            onJoin = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun PhotoBlockPreview() {
+    MemoryCircleTheme {
+        PhotoBlock(
+            photo = previewPhoto,
+            fallbackName = "Ada Lovelace",
+            fallbackAvatarUrl = ""
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun CommentRowPreview() {
+    MemoryCircleTheme {
+        CommentRow(
+            comment = previewComment
         )
     }
 }

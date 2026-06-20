@@ -1,3 +1,9 @@
+/**
+ * What: A horizontally scrolling row of scrapbook thumbnails grouped under a month.
+ * Who:  Used by GroupDetailScreen and MemoriesScreen.
+ * When: Composed for each month section when listing a group's or user's scrapbooks.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

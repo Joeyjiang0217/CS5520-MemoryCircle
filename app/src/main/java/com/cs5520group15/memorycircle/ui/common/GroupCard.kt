@@ -1,3 +1,9 @@
+/**
+ * What: Hero gradient card for a memory group, with date, name, and a memory-count badge.
+ * Who:  Used by HomeScreen.
+ * When: Composed for each group in the Home tab's RECENT GROUPS list.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

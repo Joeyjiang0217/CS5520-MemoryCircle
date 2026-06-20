@@ -1,3 +1,13 @@
+/**
+ * What: Jetpack Compose UI for the Friends landing tab — lists friends, groups,
+ *       and incoming requests, and branches out to search / add-friend /
+ *       all-requests.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the Friends
+ *       route; reached from the bottom navigation bar's "friends" tab.
+ * When: Composed when the user navigates to the Friends route (the "friends"
+ *       bottom-nav tab).
+ */
+
 package com.cs5520group15.memorycircle.ui.friends
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -318,6 +328,18 @@ private fun Header(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun HeaderPreview() {
+    MemoryCircleTheme {
+        Header(
+            friendCount    = 12,
+            groupCount     = 3,
+            onAddFriendTap = {}
+        )
+    }
+}
+
 /**
  * What: The "FRIEND REQUESTS (N)" block on the Friends landing tab. Always
  *       renders the header + "See all ›" so the user can reach
@@ -366,6 +388,29 @@ private fun FriendRequestsSection(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun FriendRequestsSectionPreview() {
+    MemoryCircleTheme {
+        FriendRequestsSection(
+            pending   = listOf(
+                FriendRequest(
+                    id            = "r1",
+                    fromUserId    = "u9",
+                    fromUserName  = "Grace Hopper",
+                    fromUserEmail = "grace@example.com",
+                    mutualFriends = 2,
+                    status        = FriendRequest.Status.PENDING,
+                    fromUserBio   = ""
+                )
+            ),
+            onAccept  = {},
+            onReject  = {},
+            onOpenAll = {}
+        )
+    }
+}
+
 /**
  * What: A single Friend Request card — Sage-tinted container wrapping an
  *       AvatarListRow with Accept + reject ✕ in the trailing slot.
@@ -404,6 +449,26 @@ private fun FriendRequestCard(
             Spacer(modifier = Modifier.width(6.dp))
             DeclineCircleButton(onClick = onReject)
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun FriendRequestCardPreview() {
+    MemoryCircleTheme {
+        FriendRequestCard(
+            request  = FriendRequest(
+                id            = "r1",
+                fromUserId    = "u9",
+                fromUserName  = "Grace Hopper",
+                fromUserEmail = "grace@example.com",
+                mutualFriends = 2,
+                status        = FriendRequest.Status.PENDING,
+                fromUserBio   = ""
+            ),
+            onAccept = {},
+            onReject = {}
+        )
     }
 }
 
@@ -446,6 +511,17 @@ private fun ContactsTabRow(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ContactsTabRowPreview() {
+    MemoryCircleTheme {
+        ContactsTabRow(
+            selected = ContactsTab.FRIENDS,
+            onSelect = {}
+        )
+    }
+}
+
 @Composable
 private fun TabItem(
     label:    String,
@@ -473,6 +549,18 @@ private fun TabItem(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun TabItemPreview() {
+    MemoryCircleTheme {
+        TabItem(
+            label    = "Friends",
+            selected = true,
+            onClick  = {}
+        )
+    }
+}
+
 @Composable
 private fun SectionLetter(letter: Char) {
     Box(
@@ -486,6 +574,14 @@ private fun SectionLetter(letter: Char) {
             style = MaterialTheme.typography.labelSmall,
             color = InkSecondary
         )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SectionLetterPreview() {
+    MemoryCircleTheme {
+        SectionLetter(letter = 'A')
     }
 }
 
@@ -521,6 +617,18 @@ private fun AlphabetIndex(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AlphabetIndexPreview() {
+    MemoryCircleTheme {
+        AlphabetIndex(
+            availableLetters = setOf('A', 'B', 'C'),
+            onLetterTap      = {},
+            onStarTap        = {}
+        )
+    }
+}
+
 @Composable
 private fun IndexEntry(
     label:   String,
@@ -537,6 +645,18 @@ private fun IndexEntry(
             text     = label,
             fontSize = 10.sp,
             color    = if (enabled) Brown else BrownDisabled
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun IndexEntryPreview() {
+    MemoryCircleTheme {
+        IndexEntry(
+            label   = "A",
+            enabled = true,
+            onClick = {}
         )
     }
 }
@@ -624,6 +744,28 @@ private fun SwipeableFriendRow(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SwipeableFriendRowPreview() {
+    MemoryCircleTheme {
+        SwipeableFriendRow(
+            friend          = Friend(
+                id             = "u1",
+                name           = "Ada Lovelace",
+                email          = "ada@example.com",
+                sharedMemories = 4,
+                isOnline       = true,
+                avatarUrl      = "",
+                bio            = ""
+            ),
+            pendingDeleteId = null,
+            onClick         = {},
+            onSwipedAway    = {}
+        )
+    }
+}
+
 @Composable
 private fun FriendSwipeBackground() {
     Box(
@@ -639,6 +781,14 @@ private fun FriendSwipeBackground() {
             tint               = Cream,
             modifier           = Modifier.size(24.dp)
         )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun FriendSwipeBackgroundPreview() {
+    MemoryCircleTheme {
+        FriendSwipeBackground()
     }
 }
 

@@ -1,3 +1,12 @@
+/**
+ * What: In-memory source of truth for the user's notification-channel toggles
+ *       (friend requests, group activity, memory posts). Resets on app restart.
+ * Who: Read + written by NotificationSettingsScreen; read by
+ *       NotificationsRepository to gate each system notification.
+ * When: First touched when the user opens Settings → Notifications, and on every
+ *       Firestore event NotificationsRepository considers firing.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import com.cs5520group15.memorycircle.model.NotificationSettings

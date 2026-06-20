@@ -1,3 +1,11 @@
+/**
+ * What: Shared brand TextField color palettes — a transparent default and a
+ *       translucent-white-on-gradient variant.
+ * Who:  Used by CreateGroupScreen, EditProfileScreen, ScrapbookScreen/ScrapbookViewerScreen
+ *       (default) and LoginScreen, RegisterScreen (on-gradient).
+ * When: Passed to an OutlinedTextField's `colors` parameter when composing input fields.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.material3.ExperimentalMaterial3Api

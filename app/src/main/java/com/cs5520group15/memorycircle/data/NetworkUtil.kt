@@ -1,3 +1,13 @@
+/**
+ * What: Stateless check for whether the device has a validated internet
+ *       connection, used to gate writes before Firestore silently queues them
+ *       offline.
+ * Who: Used by CreateGroupScreen, EditProfileScreen, GroupDetailScreen,
+ *       AvatarViewerScreen, FriendsScreen, and AddFriendSearchScreen.
+ * When: Called inline from those screens right before a network-dependent
+ *       action (save / upload / create) to surface an offline state up front.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.content.Context

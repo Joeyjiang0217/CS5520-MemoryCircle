@@ -1,3 +1,11 @@
+/**
+ * What: Data model for the current user's profile fields (name, bio, email,
+ *       avatarUrl) shown on the Profile tab and EditProfile screen.
+ * Who:  Used by ProfileRepository, ProfileViewModel, EditProfileViewModel,
+ *       and AvatarViewerScreen.
+ * When: Republished by ProfileRepository whenever the users/{uid} doc changes.
+ */
+
 package com.cs5520group15.memorycircle.model
 
 /**

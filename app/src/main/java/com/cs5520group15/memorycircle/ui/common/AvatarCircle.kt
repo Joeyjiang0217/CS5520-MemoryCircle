@@ -1,3 +1,10 @@
+/**
+ * What: Circular user avatar — Coil image when a photoUrl is given, else a letter fallback.
+ * Who:  Used by HomeScreen, ProfileScreen, AvatarViewerScreen, GroupDetailScreen, and
+ *       the friend/group rows (AvatarListRow).
+ * When: Composed wherever a user's avatar is shown — profile headers, list rows, viewers.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

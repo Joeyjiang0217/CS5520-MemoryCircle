@@ -1,3 +1,15 @@
+/**
+ * What: Process-lifetime singleton that watches Firestore (friend requests,
+ *       group membership, posts / photos / comments) and turns new events into
+ *       Android system notifications via NotificationService, gated by
+ *       NotificationSettingsRepository.
+ * Who: Started by MainActivity.onCreate; also driven by SeedRepository's
+ *       simulate* dev-tools writes (via DevToolsViewModel) to fire test events.
+ * When: init(ctx) is called once at app start; its AuthStateListener then
+ *       attaches listeners on sign-in and detaches them on sign-out for the
+ *       whole process lifetime.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.content.Context

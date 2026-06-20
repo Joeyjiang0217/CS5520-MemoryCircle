@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the All Friend Requests ("See all") screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the
+ *       AllFriendRequests route; reached from FriendsScreen via its
+ *       onOpenAllRequests callback.
+ * When: Composed when the user navigates to the AllFriendRequests route.
+ */
+
 package com.cs5520group15.memorycircle.ui.friendrequests
 
 import androidx.compose.foundation.background
@@ -261,5 +269,56 @@ private fun subtitleFor(request: FriendRequest): String = when (request.status) 
 fun AllFriendRequestsScreenPreview() {
     MemoryCircleTheme {
         AllFriendRequestsScreen(onBack = {})
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SwipeableRequestRowPreview() {
+    MemoryCircleTheme {
+        SwipeableRequestRow(
+            request = FriendRequest(
+                id = "r1",
+                fromUserId = "u9",
+                fromUserName = "Grace Hopper",
+                fromUserEmail = "grace@example.com",
+                mutualFriends = 2,
+                status = FriendRequest.Status.PENDING,
+                fromUserBio = ""
+            ),
+            pendingDeleteId = null,
+            onAccept = {},
+            onDecline = {},
+            onSwipedAway = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SwipeBackgroundPreview() {
+    MemoryCircleTheme {
+        SwipeBackground()
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun RequestRowPreview() {
+    MemoryCircleTheme {
+        RequestRow(
+            request = FriendRequest(
+                id = "r1",
+                fromUserId = "u9",
+                fromUserName = "Grace Hopper",
+                fromUserEmail = "grace@example.com",
+                mutualFriends = 2,
+                status = FriendRequest.Status.PENDING,
+                fromUserBio = ""
+            ),
+            onAccept = {},
+            onDecline = {}
+        )
     }
 }

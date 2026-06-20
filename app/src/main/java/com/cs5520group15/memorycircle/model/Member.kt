@@ -1,3 +1,11 @@
+/**
+ * What: Data model for one person who belongs to a memory group, driving the
+ *       group-members row (avatar + name + shared-memories count).
+ * Who:  Used by GroupDetailViewModel / GroupMembersViewModel and their screens.
+ * When: Instantiated whenever a group's roster is rebuilt from memberIds plus
+ *       AuthRepository.getUserBriefs.
+ */
+
 package com.cs5520group15.memorycircle.model
 
 /**

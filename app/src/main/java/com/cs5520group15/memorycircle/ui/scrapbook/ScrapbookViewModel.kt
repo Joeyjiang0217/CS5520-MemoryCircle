@@ -1,3 +1,10 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Scrapbook creation screen,
+ *       supporting both creating a new time point and joining an existing one.
+ * Who:  Used by ScrapbookScreen.
+ * When: Created when ScrapbookScreen is composed.
+ */
+
 package com.cs5520group15.memorycircle.ui.scrapbook
 
 import androidx.lifecycle.ViewModel

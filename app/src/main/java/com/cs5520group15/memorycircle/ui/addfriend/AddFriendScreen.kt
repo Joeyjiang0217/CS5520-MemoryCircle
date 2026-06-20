@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Add Friend screen — the landing page of the
+ *       "add new friend" flow.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the AddFriend
+ *       route; reached from FriendsScreen via its onOpenAddFriend callback.
+ * When: Composed when the user navigates to the AddFriend route.
+ */
+
 package com.cs5520group15.memorycircle.ui.addfriend
 
 import androidx.compose.foundation.layout.*

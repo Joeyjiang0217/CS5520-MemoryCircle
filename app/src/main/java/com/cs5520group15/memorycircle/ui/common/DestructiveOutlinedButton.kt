@@ -1,3 +1,9 @@
+/**
+ * What: Full-width red-outlined button for destructive secondary actions, with optional icon.
+ * Who:  Used by SettingsScreen (Log out) and GroupDetailScreen (Leave group).
+ * When: Composed as the final affordance at the foot of the page.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.BorderStroke

@@ -1,3 +1,12 @@
+/**
+ * What: Thin wrapper over Android's NotificationManager — registers one
+ *       high-importance channel and posts heads-up notifications with a unique
+ *       id per call.
+ * Who: Used by NotificationsRepository (its Firestore listeners call show()).
+ * When: init() runs once from MainActivity.onCreate (via
+ *       NotificationsRepository.init); show() fires per detected Firestore event.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import android.app.NotificationChannel

@@ -1,3 +1,11 @@
+/**
+ * What: Data models for a group's scrapbook timeline — a post (ScrapbookEntry),
+ *       a photo within a post (Photo), and a comment (Comment).
+ * Who:  Used by ScrapbookRepository and all scrapbook screens.
+ * When: Instantiated when loading or rendering a timeline entry, and when a
+ *       member creates/joins a post, uploads a photo, or posts a comment.
+ */
+
 package com.cs5520group15.memorycircle.model
 
 /**

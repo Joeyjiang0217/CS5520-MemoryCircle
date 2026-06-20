@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Group Members screen.
+ * Who:  Used by GroupMembersScreen.
+ * When: Created when GroupMembersScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.groupmembers
 
 import androidx.lifecycle.ViewModel

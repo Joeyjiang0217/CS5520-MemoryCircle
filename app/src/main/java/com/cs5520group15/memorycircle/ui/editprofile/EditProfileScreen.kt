@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Edit Profile screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the EditProfile
+ *       route; reached from the Profile screen's "Edit Profile" action and from
+ *       the Settings screen.
+ * When: Composed when the user navigates to the EditProfile route.
+ */
+
 package com.cs5520group15.memorycircle.ui.editprofile
 
 import androidx.compose.foundation.clickable
@@ -249,6 +257,31 @@ fun EditProfileScreenPreview() {
         EditProfileScreen(
             onBack             = {},
             onOpenAvatarViewer = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AvatarRowPreview() {
+    MemoryCircleTheme {
+        AvatarRow(
+            name     = "Ada Lovelace",
+            photoUrl = "",
+            onClick  = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun EditFieldDialogPreview() {
+    MemoryCircleTheme {
+        EditFieldDialog(
+            field        = EditField.NAME,
+            initialValue = "Ada Lovelace",
+            onSave       = {},
+            onDismiss    = {}
         )
     }
 }

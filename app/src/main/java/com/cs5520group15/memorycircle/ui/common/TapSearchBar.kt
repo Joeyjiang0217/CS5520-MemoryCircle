@@ -1,3 +1,9 @@
+/**
+ * What: A non-editable, tappable search bar that navigates to a dedicated search screen when clicked.
+ * Who:  Used by AddFriendScreen and FriendsScreen.
+ * When: Composed as a search affordance on a list screen, opening a full search screen on tap.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

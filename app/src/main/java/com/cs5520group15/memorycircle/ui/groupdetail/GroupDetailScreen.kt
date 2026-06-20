@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Group Detail screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the GroupDetail
+ *       route; reached from a group's ScrapbookViewer, and from the Friends and
+ *       FriendsSearch screens when opening a group.
+ * When: Composed when the user navigates to the GroupDetail route.
+ */
+
 package com.cs5520group15.memorycircle.ui.groupdetail
 
 import androidx.compose.foundation.background
@@ -593,6 +601,91 @@ fun GroupDetailScreenPreview() {
             onOpenMemberProfile = {},
             onInviteMember      = {},
             onOpenScrapbook     = { _, _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun GroupNameHeroPreview() {
+    MemoryCircleTheme {
+        GroupNameHero(
+            groupName   = "Weekend Hikers",
+            memberCount = 4,
+            onRename    = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun MembersCardPreview() {
+    MemoryCircleTheme {
+        MembersCard(
+            members          = listOf(
+                Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
+                Member(id = "m2", name = "Grace Hopper", sharedMemories = 1)
+            ),
+            isOwner          = true,
+            currentUid       = "m1",
+            inEditMode       = false,
+            onMemberClick    = {},
+            onSeeAllClick    = {},
+            onInviteClick    = {},
+            onToggleEditMode = {},
+            onKickMember     = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ThumbnailGridPreview() {
+    MemoryCircleTheme {
+        ThumbnailGrid(
+            members          = listOf(
+                Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
+                Member(id = "m2", name = "Grace Hopper", sharedMemories = 1)
+            ),
+            isOwner          = true,
+            currentUid       = "m1",
+            inEditMode       = false,
+            onMemberClick    = {},
+            onInviteClick    = {},
+            onToggleEditMode = {},
+            onKickMember     = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun MemberThumbnailPreview() {
+    MemoryCircleTheme {
+        MemberThumbnail(
+            member      = Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
+            onClick     = {},
+            showKick    = false,
+            onKickClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun InviteThumbnailPreview() {
+    MemoryCircleTheme {
+        InviteThumbnail(onClick = {})
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun RemoveThumbnailPreview() {
+    MemoryCircleTheme {
+        RemoveThumbnail(
+            active  = false,
+            onClick = {}
         )
     }
 }

@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Scrapbook creation screen, where a member adds a new
+ *       time point or joins an existing one with a photo and description.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation under the ScrapbookDetail route;
+ *       reached from ScrapbookViewerScreen via add-time-point and join-entry actions.
+ * When: Composed when the user navigates to the ScrapbookDetail destination.
+ */
+
 package com.cs5520group15.memorycircle.ui.scrapbook
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -320,5 +328,29 @@ fun AddTagChip(onClick: () -> Unit) {
 fun ScrapbookScreenPreview() {
     MemoryCircleTheme {
         ScrapbookScreen(groupId = "1", onBack = {})
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun TagChipPreview() {
+    MemoryCircleTheme {
+        TagChip(label = "park", onRemove = {})
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ReadOnlyTagChipPreview() {
+    MemoryCircleTheme {
+        ReadOnlyTagChip(label = "food")
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AddTagChipPreview() {
+    MemoryCircleTheme {
+        AddTagChip(onClick = {})
     }
 }

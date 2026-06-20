@@ -1,3 +1,9 @@
+/**
+ * What: An editable search input row with a leading search icon and keyboard search action.
+ * Who:  Used by AddFriendSearchScreen and FriendsSearchScreen.
+ * When: Composed at the top of a search screen where the user types a live query.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.layout.Row

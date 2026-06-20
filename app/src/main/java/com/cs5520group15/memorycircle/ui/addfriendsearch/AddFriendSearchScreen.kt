@@ -1,3 +1,12 @@
+/**
+ * What: Jetpack Compose UI for the Add Friend Search screen — full-screen
+ *       search overlay with a live TextField and Firestore-backed results.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the
+ *       AddFriendSearch route; reached from AddFriendScreen via its
+ *       onOpenSearch callback.
+ * When: Composed when the user navigates to the AddFriendSearch route.
+ */
+
 package com.cs5520group15.memorycircle.ui.addfriendsearch
 
 import androidx.compose.foundation.layout.*

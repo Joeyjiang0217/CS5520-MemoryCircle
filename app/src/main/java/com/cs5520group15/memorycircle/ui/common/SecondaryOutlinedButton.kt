@@ -1,3 +1,9 @@
+/**
+ * What: The app's secondary, outlined-style button for lower-emphasis actions.
+ * Who:  Used by ProfileScreen, CreateGroupScreen, and ScrapbookViewerScreen.
+ * When: Composed alongside or below a PrimaryButton for an alternate/cancel-style action.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.BorderStroke

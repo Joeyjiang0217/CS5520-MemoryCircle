@@ -1,3 +1,14 @@
+/**
+ * What: Repository wrapping Firebase Authentication (register, login, password
+ *       reset, logout, current-user accessors) plus users/{uid} profile lookups
+ *       and the masking / hashing / case-folding helpers for the public users doc.
+ * Who: Used by RegisterViewModel, LoginViewModel, and HomeViewModel for auth;
+ *       its lookup + helper functions back ScrapbookRepository.assemble,
+ *       FriendsRepository, GroupRepository, ProfileRepository, and SeedRepository.
+ * When: Called whenever a screen needs sign-in/out (login/register flows) or a
+ *       repository resolves uids to names/avatars during a Firestore read.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import com.google.firebase.auth.FirebaseUser

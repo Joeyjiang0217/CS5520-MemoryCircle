@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Register screen.
+ * Who:  Used by RegisterScreen.
+ * When: Created when RegisterScreen is first composed; survives configuration changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.register
 
 import androidx.lifecycle.ViewModel

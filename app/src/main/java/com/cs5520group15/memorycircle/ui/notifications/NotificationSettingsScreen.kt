@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Notification Settings screen — toggles for the
+ *       app's notification preferences.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached from SettingsScreen
+ *       via its "open notification settings" action.
+ * When: Composed when the user navigates to the NotificationSettings route from Settings.
+ */
+
 package com.cs5520group15.memorycircle.ui.notifications
 
 import androidx.compose.foundation.layout.*
@@ -118,6 +126,19 @@ private fun ToggleRow(
                 uncheckedTrackColor  = BrownDisabled,
                 uncheckedBorderColor = BrownDisabled
             )
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ToggleRowPreview() {
+    MemoryCircleTheme {
+        ToggleRow(
+            label       = "Friend requests",
+            description = "Notify me about new friend requests",
+            checked     = true,
+            onChange    = {}
         )
     }
 }

@@ -1,3 +1,12 @@
+/**
+ * What: Sealed wrapper for async operation outcomes (Loading / Success / Error)
+ *       so callers can branch on the result without try/catch.
+ * Who: Returned by AuthRepository's suspend functions; consumed by
+ *       RegisterViewModel, LoginViewModel, and HomeViewModel.
+ * When: Constructed each time a repository call completes and branched on by the
+ *       ViewModel that awaited it.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 /**

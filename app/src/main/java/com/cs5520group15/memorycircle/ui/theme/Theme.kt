@@ -1,3 +1,11 @@
+/**
+ * What: The root Material3 theme (MemoryCircleTheme) that binds the brand color
+ *       scheme and typography for the app.
+ * Who:  Called by MainActivity to wrap the entire app, and by every @Preview.
+ * When: Applied once at app startup; all child composables inherit its colors
+ *       and typography for the lifetime of the composition.
+ */
+
 package com.cs5520group15.memorycircle.ui.theme
 
 import androidx.compose.material3.MaterialTheme

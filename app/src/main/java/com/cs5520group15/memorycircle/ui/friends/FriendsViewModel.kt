@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Friends screen.
+ * Who:  Used by FriendsScreen.
+ * When: Created when FriendsScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.friends
 
 import androidx.lifecycle.ViewModel

@@ -1,3 +1,10 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Scrapbook Viewer screen,
+ *       mediating viewer edits to the shared ScrapbookRepository.
+ * Who:  Used by ScrapbookViewerScreen.
+ * When: Created when ScrapbookViewerScreen is composed; bound to a group on first load.
+ */
+
 package com.cs5520group15.memorycircle.ui.scrapbookviewer
 
 import androidx.lifecycle.ViewModel

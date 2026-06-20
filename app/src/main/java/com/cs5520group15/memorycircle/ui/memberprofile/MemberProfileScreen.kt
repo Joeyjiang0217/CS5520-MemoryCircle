@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Member Profile screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the MemberProfile
+ *       route; reached from GroupMembers, the Friends screen, AddFriendSearch,
+ *       and FriendsSearch when opening another user's profile.
+ * When: Composed when the user navigates to the MemberProfile route.
+ */
+
 package com.cs5520group15.memorycircle.ui.memberprofile
 
 import androidx.compose.foundation.layout.*

@@ -1,3 +1,11 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the All Friend
+ *       Requests screen.
+ * Who:  Used by AllFriendRequestsScreen.
+ * When: Created when AllFriendRequestsScreen is first composed; survives config
+ *       changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.friendrequests
 
 import androidx.lifecycle.ViewModel

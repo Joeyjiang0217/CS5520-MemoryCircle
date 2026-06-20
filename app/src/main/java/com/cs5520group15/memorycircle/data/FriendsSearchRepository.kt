@@ -1,3 +1,11 @@
+/**
+ * What: In-memory store of the user's recent (last 10) Friends-search queries,
+ *       deduped case-insensitively with newest first. Resets on app restart.
+ * Who: Used by FriendsSearchViewModel.
+ * When: Read when the Friends search page is shown; written when the user taps a
+ *       search result, committing that query to history.
+ */
+
 package com.cs5520group15.memorycircle.data
 
 import kotlinx.coroutines.flow.MutableStateFlow

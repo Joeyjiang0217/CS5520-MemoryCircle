@@ -1,3 +1,12 @@
+/**
+ * What: Jetpack Compose UI for the Create Group screen — a contact picker that
+ *       doubles as the invite-members flow when launched in invite mode.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the CreateGroup
+ *       route; reached from Home (the create-group action) and from GroupDetail
+ *       (the invite-member action, which opens it in invite mode).
+ * When: Composed when the user navigates to the CreateGroup route.
+ */
+
 package com.cs5520group15.memorycircle.ui.creategroup
 
 import androidx.activity.compose.BackHandler
@@ -291,6 +300,20 @@ private fun TapSearchRow(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun TapSearchRowPreview() {
+    MemoryCircleTheme {
+        TapSearchRow(
+            selected = listOf(
+                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
+                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
+            ),
+            onClick  = {}
+        )
+    }
+}
+
 /**
  * What: The active search bar — same chrome as TapSearchRow but with an
  *       editable BasicTextField in place of the static "Search" placeholder
@@ -357,6 +380,22 @@ private fun ActiveSearchRow(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ActiveSearchRowPreview() {
+    MemoryCircleTheme {
+        ActiveSearchRow(
+            query          = "ada",
+            onQueryChange  = {},
+            selected       = listOf(
+                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking")
+            ),
+            focusRequester = remember { FocusRequester() },
+            onClear        = {}
+        )
+    }
+}
+
 /**
  * What: Renders the avatar-preview run shared by both search bar variants.
  *       Extracted so the two callers stay in visual lock-step (avatar size,
@@ -393,6 +432,20 @@ private fun SelectedAvatarPreviews(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SelectedAvatarPreviewsPreview() {
+    MemoryCircleTheme {
+        SelectedAvatarPreviews(
+            previews = listOf(
+                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
+                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
+            ),
+            overflow = 3
+        )
+    }
+}
+
 /**
  * What: Small round clear-query button on the right of the active search bar.
  *       Same visual family as DeclineCircleButton (neutral grey background +
@@ -417,6 +470,14 @@ private fun ClearQueryButton(onClick: () -> Unit) {
             tint               = InkSecondary,
             modifier           = Modifier.size(12.dp)
         )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ClearQueryButtonPreview() {
+    MemoryCircleTheme {
+        ClearQueryButton(onClick = {})
     }
 }
 
@@ -446,6 +507,21 @@ private fun ContactsList(
                 onClick  = { onToggle(contact.id) }
             )
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ContactsListPreview() {
+    MemoryCircleTheme {
+        ContactsList(
+            contacts    = listOf(
+                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
+                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
+            ),
+            selectedIds = setOf("u1"),
+            onToggle    = {}
+        )
     }
 }
 
@@ -480,6 +556,21 @@ private fun SearchResults(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SearchResultsPreview() {
+    MemoryCircleTheme {
+        SearchResults(
+            results     = listOf(
+                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
+                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
+            ),
+            selectedIds = setOf("u1"),
+            onPick      = {}
+        )
+    }
+}
+
 /**
  * What: One contact row used by the default ContactsList. Branded selection
  *       circle on the left, avatar + name in the middle. The whole row is
@@ -511,6 +602,18 @@ private fun ContactRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ContactRowPreview() {
+    MemoryCircleTheme {
+        ContactRow(
+            contact  = Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
+            selected = true,
+            onClick  = {}
         )
     }
 }
@@ -560,6 +663,18 @@ private fun ResultRow(
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun ResultRowPreview() {
+    MemoryCircleTheme {
+        ResultRow(
+            friend   = Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2),
+            disabled = true,
+            onClick  = {}
+        )
+    }
+}
+
 /**
  * What: Branded selection circle drawn as a small Box rather than the default
  *       Material Checkbox so the visual stays inside the brand palette
@@ -599,6 +714,14 @@ private fun SelectionCheckbox(selected: Boolean, disabled: Boolean) {
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun SelectionCheckboxPreview() {
+    MemoryCircleTheme {
+        SelectionCheckbox(selected = true, disabled = false)
+    }
+}
+
 /**
  * What: Sticky CTA at the foot of the screen. With nothing selected the button
  *       reads as a disabled-looking outlined affordance — the user can see
@@ -633,6 +756,18 @@ private fun BottomCta(
                 onClick = onConfirm
             )
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun BottomCtaPreview() {
+    MemoryCircleTheme {
+        BottomCta(
+            selectedCount = 2,
+            ctaLabel      = "Create Now",
+            onConfirm     = {}
+        )
     }
 }
 

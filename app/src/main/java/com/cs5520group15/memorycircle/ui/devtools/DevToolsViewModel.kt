@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Dev Tools screen.
+ * Who:  Used by DevToolsScreen.
+ * When: Created when DevToolsScreen is first composed; survives configuration changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.devtools
 
 import android.content.Context

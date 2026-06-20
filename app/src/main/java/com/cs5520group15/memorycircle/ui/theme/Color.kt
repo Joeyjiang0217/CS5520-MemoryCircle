@@ -1,3 +1,11 @@
+/**
+ * What: The MemoryCircle brand color palette (named Color constants and their
+ *       transparency/destructive variants).
+ * Who:  Used by Theme.kt to build the Material color scheme and referenced
+ *       directly by composables across the ui package for custom coloring.
+ * When: Resolved at composition time wherever a color constant is read.
+ */
+
 package com.cs5520group15.memorycircle.ui.theme
 
 import androidx.compose.ui.graphics.Color

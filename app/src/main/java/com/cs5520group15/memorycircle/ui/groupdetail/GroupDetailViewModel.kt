@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Group Detail screen.
+ * Who:  Used by GroupDetailScreen.
+ * When: Created when GroupDetailScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.groupdetail
 
 import androidx.lifecycle.ViewModel

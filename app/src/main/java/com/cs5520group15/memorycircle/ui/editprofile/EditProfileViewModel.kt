@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Edit Profile screen.
+ * Who:  Used by EditProfileScreen.
+ * When: Created when EditProfileScreen is first composed; survives config changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.editprofile
 
 import androidx.lifecycle.ViewModel

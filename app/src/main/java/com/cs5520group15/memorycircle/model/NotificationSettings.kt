@@ -1,3 +1,11 @@
+/**
+ * What: Data model holding the three push-notification toggles (friend
+ *       requests, group activity, memory posts) for the current user.
+ * Who:  Used by NotificationSettingsRepository and NotificationSettingsScreen.
+ * When: Default all-on; rebuilt whenever the user toggles a switch on the
+ *       notification settings page.
+ */
+
 package com.cs5520group15.memorycircle.model
 
 /**

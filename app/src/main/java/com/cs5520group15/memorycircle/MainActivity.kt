@@ -1,3 +1,12 @@
+/**
+ * What: The launcher Activity; initializes the notification stack, requests
+ *       runtime notification permission, and hosts the Compose UI
+ *       (MemoryCircleTheme + MemoryCircleNavigation).
+ * Who:  Declared in AndroidManifest as the launcher; started by the Android OS.
+ * When: Instantiated by the OS when the app is launched from the home screen;
+ *       onCreate runs once per Activity creation.
+ */
+
 package com.cs5520group15.memorycircle
 
 import android.Manifest

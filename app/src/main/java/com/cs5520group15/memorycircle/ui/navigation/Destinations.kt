@@ -1,3 +1,11 @@
+/**
+ * What: The type-safe route objects/data classes for every in-app navigation
+ *       destination.
+ * Who:  Used by MemoryCircleNavigation to register routes and by any screen
+ *       that triggers navigation.
+ * When: Referenced every time the NavController navigates to a destination.
+ */
+
 package com.cs5520group15.memorycircle.ui.navigation
 
 import kotlinx.serialization.Serializable

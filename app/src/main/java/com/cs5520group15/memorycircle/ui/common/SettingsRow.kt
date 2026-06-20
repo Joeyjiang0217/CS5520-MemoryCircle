@@ -1,3 +1,9 @@
+/**
+ * What: A tappable labeled list row used in settings-style menus.
+ * Who:  Used by SettingsScreen, EditProfileScreen, and ProfileScreen.
+ * When: Composed as each entry in a vertical settings/menu list, separated by RowDivider.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

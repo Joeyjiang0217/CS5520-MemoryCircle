@@ -1,3 +1,9 @@
+/**
+ * What: Compact group list row with a WeChat-style avatar-collage chip, name, and member count.
+ * Who:  Used by FriendsScreen and FriendsSearchScreen.
+ * When: Composed for each group in a list of groups.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background
@@ -209,6 +215,38 @@ fun GroupRowPreview() {
             modifier         = Modifier.padding(horizontal = 24.dp),
             memberNames      = listOf("Alice", "Bob", "Cara", "Dan", "Eve"),
             memberAvatarUrls = listOf("", "", "", "", "")
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AvatarCollageChipPreview() {
+    MemoryCircleTheme {
+        AvatarCollageChip(
+            avatarUrls = listOf("", "", "", "", ""),
+            names      = listOf("Alice", "Bob", "Cara", "Dan", "Eve")
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun CollageRowPreview() {
+    MemoryCircleTheme {
+        CollageRow(
+            cells = listOf("Alice" to "", "Bob" to "", "Cara" to "")
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun CollageCellPreview() {
+    MemoryCircleTheme {
+        CollageCell(
+            name     = "Alice",
+            photoUrl = ""
         )
     }
 }

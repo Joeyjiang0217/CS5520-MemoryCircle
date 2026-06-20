@@ -1,3 +1,11 @@
+/**
+ * What: Jetpack Compose UI for the Memories screen — browses past scrapbooks and
+ *       opens them by month/year.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation; reached from the bottom
+ *       navigation bar's "memories" tab.
+ * When: Composed when the user navigates to the Memories route via the bottom nav tab.
+ */
+
 package com.cs5520group15.memorycircle.ui.memories
 
 import androidx.compose.foundation.background
@@ -129,6 +137,30 @@ private fun MonthSection(
                 onClick      = { onOpenScrapbook(scrapbook) }
             )
         }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun MonthSectionPreview() {
+    MemoryCircleTheme {
+        MonthSection(
+            section = MemoriesViewModel.MonthSection(
+                month = "June",
+                year  = "2025",
+                scrapbooks = listOf(
+                    MemoriesViewModel.Scrapbook(
+                        id           = "s1",
+                        groupId      = "g1",
+                        groupName    = "Summer Trip",
+                        memoryCount  = 8,
+                        colorType    = "brown",
+                        thumbnailUrl = ""
+                    )
+                )
+            ),
+            onOpenScrapbook = {}
+        )
     }
 }
 

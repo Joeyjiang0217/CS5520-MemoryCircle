@@ -1,3 +1,10 @@
+/**
+ * What: Jetpack Compose UI for the Group Members screen.
+ * Who:  Wired into the nav graph by MemoryCircleNavigation for the GroupMembers
+ *       route; reached from the "View all members" action on GroupDetail.
+ * When: Composed when the user navigates to the GroupMembers route.
+ */
+
 package com.cs5520group15.memorycircle.ui.groupmembers
 
 import androidx.compose.foundation.layout.*
@@ -102,6 +109,14 @@ private fun GroupHeader(groupName: String, memberCount: Int) {
             color = InkSecondary
         )
         Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun GroupHeaderPreview() {
+    MemoryCircleTheme {
+        GroupHeader(groupName = "Summer Trip", memberCount = 5)
     }
 }
 

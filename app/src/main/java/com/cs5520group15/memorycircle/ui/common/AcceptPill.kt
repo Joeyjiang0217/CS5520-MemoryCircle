@@ -1,3 +1,9 @@
+/**
+ * What: Affirmative AccentGreen action pill for row trailing slots (Accept, Add).
+ * Who:  Used by FriendsScreen, AllFriendRequestsScreen, and AddFriendSearchScreen.
+ * When: Composed in a request/search row's trailing slot while the action is available.
+ */
+
 package com.cs5520group15.memorycircle.ui.common
 
 import androidx.compose.foundation.background

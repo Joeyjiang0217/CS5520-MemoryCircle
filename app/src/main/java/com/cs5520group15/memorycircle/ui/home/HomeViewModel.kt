@@ -1,3 +1,9 @@
+/**
+ * What: ViewModel that holds UI state and business logic for the Home screen.
+ * Who:  Used by HomeScreen.
+ * When: Created when HomeScreen is first composed; survives configuration changes.
+ */
+
 package com.cs5520group15.memorycircle.ui.home
 
 import androidx.lifecycle.ViewModel
