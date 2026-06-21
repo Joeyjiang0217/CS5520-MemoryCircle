@@ -56,7 +56,30 @@ fun AllFriendRequestsScreen(
 ) {
     val requests by viewModel.requests.collectAsStateWithLifecycle()
 
-    var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    AllFriendRequestsContent(
+        requests   = requests,
+        onBack     = onBack,
+        onAccept   = viewModel::accept,
+        onDecline  = viewModel::decline,
+        onDelete   = viewModel::delete
+    )
+}
+
+/**
+ * Stateless body — takes the request list + callbacks so it renders in @Preview
+ * without touching Firebase. AllFriendRequestsScreen above is the thin wrapper
+ * that wires the ViewModel.
+ */
+@Composable
+private fun AllFriendRequestsContent(
+    requests:  List<FriendRequest>,
+    onBack:    () -> Unit,
+    onAccept:  (String) -> Unit,
+    onDecline: (String) -> Unit,
+    onDelete:  (String) -> Unit,
+    initialPendingDeleteId: String? = null
+) {
+    var pendingDeleteId by remember { mutableStateOf(initialPendingDeleteId) }
     val pendingDeleteRequest = pendingDeleteId?.let { id -> requests.firstOrNull { it.id == id } }
 
     Scaffold(
@@ -91,8 +114,8 @@ fun AllFriendRequestsScreen(
                 SwipeableRequestRow(
                     request         = request,
                     pendingDeleteId = pendingDeleteId,
-                    onAccept        = { viewModel.accept(request.id) },
-                    onDecline       = { viewModel.decline(request.id) },
+                    onAccept        = { onAccept(request.id) },
+                    onDecline       = { onDecline(request.id) },
                     onSwipedAway    = { pendingDeleteId = request.id }
                 )
             }
@@ -106,7 +129,7 @@ fun AllFriendRequestsScreen(
                            "will be removed permanently.",
             confirmLabel = "Delete",
             onConfirm    = {
-                viewModel.delete(pendingDeleteRequest.id)
+                onDelete(pendingDeleteRequest.id)
                 pendingDeleteId = null
             },
             onDismiss    = { pendingDeleteId = null }
@@ -264,61 +287,92 @@ private fun subtitleFor(request: FriendRequest): String = when (request.status) 
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun AllFriendRequestsScreenPreview() {
-    MemoryCircleTheme {
-        AllFriendRequestsScreen(onBack = {})
-    }
-}
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+private val previewRequests = listOf(
+    FriendRequest(
+        id            = "r1",
+        fromUserId    = "u9",
+        fromUserName  = "Grace Hopper",
+        fromUserEmail = "grace@example.com",
+        mutualFriends = 2,
+        status        = FriendRequest.Status.PENDING,
+        fromUserBio   = ""
+    ),
+    FriendRequest(
+        id            = "r2",
+        fromUserId    = "u8",
+        fromUserName  = "Alan Turing",
+        fromUserEmail = "alan@example.com",
+        mutualFriends = 0,
+        status        = FriendRequest.Status.PENDING,
+        fromUserBio   = "Loves cryptography and morning runs."
+    ),
+    FriendRequest(
+        id            = "r3",
+        fromUserId    = "u7",
+        fromUserName  = "Ada Lovelace",
+        fromUserEmail = "ada@example.com",
+        mutualFriends = 1,
+        status        = FriendRequest.Status.ACCEPTED,
+        fromUserBio   = ""
+    ),
+    FriendRequest(
+        id            = "r4",
+        fromUserId    = "u6",
+        fromUserName  = "Linus Torvalds",
+        fromUserEmail = "linus@example.com",
+        mutualFriends = 0,
+        status        = FriendRequest.Status.DECLINED,
+        fromUserBio   = ""
+    )
+)
+
+/** Empty state — no requests at all. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friend requests · empty")
 @Composable
-fun SwipeableRequestRowPreview() {
+fun AllFriendRequestsScreenEmptyPreview() {
     MemoryCircleTheme {
-        SwipeableRequestRow(
-            request = FriendRequest(
-                id = "r1",
-                fromUserId = "u9",
-                fromUserName = "Grace Hopper",
-                fromUserEmail = "grace@example.com",
-                mutualFriends = 2,
-                status = FriendRequest.Status.PENDING,
-                fromUserBio = ""
-            ),
-            pendingDeleteId = null,
-            onAccept = {},
+        AllFriendRequestsContent(
+            requests  = emptyList(),
+            onBack    = {},
+            onAccept  = {},
             onDecline = {},
-            onSwipedAway = {}
+            onDelete  = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Mixed list — two pending + accepted + declined rows so all three row
+ *  variants render together. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friend requests · mixed")
 @Composable
-fun SwipeBackgroundPreview() {
+fun AllFriendRequestsScreenPreview() {
     MemoryCircleTheme {
-        SwipeBackground()
+        AllFriendRequestsContent(
+            requests  = previewRequests,
+            onBack    = {},
+            onAccept  = {},
+            onDecline = {},
+            onDelete  = {}
+        )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Delete-confirmation dialog showing over the second pending row. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friend requests · delete dialog")
 @Composable
-fun RequestRowPreview() {
+fun AllFriendRequestsScreenDeleteDialogPreview() {
     MemoryCircleTheme {
-        RequestRow(
-            request = FriendRequest(
-                id = "r1",
-                fromUserId = "u9",
-                fromUserName = "Grace Hopper",
-                fromUserEmail = "grace@example.com",
-                mutualFriends = 2,
-                status = FriendRequest.Status.PENDING,
-                fromUserBio = ""
-            ),
-            onAccept = {},
-            onDecline = {}
+        AllFriendRequestsContent(
+            requests               = previewRequests,
+            onBack                 = {},
+            onAccept               = {},
+            onDecline              = {},
+            onDelete               = {},
+            initialPendingDeleteId = "r2"
         )
     }
 }

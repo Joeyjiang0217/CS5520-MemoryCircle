@@ -56,12 +56,48 @@ fun FriendsSearchScreen(
     onOpenGroupDetail:    (String) -> Unit,
     viewModel:            FriendsSearchViewModel = viewModel()
 ) {
-    val query    by viewModel.query.collectAsStateWithLifecycle()
-    val recent   by viewModel.recent.collectAsStateWithLifecycle()
+    val query   by viewModel.query.collectAsStateWithLifecycle()
+    val recent  by viewModel.recent.collectAsStateWithLifecycle()
+    val friends by viewModel.friends.collectAsStateWithLifecycle()
+    val groups  by viewModel.groups.collectAsStateWithLifecycle()
 
     val friendResults = viewModel.matchFriends(query)
     val groupResults  = viewModel.matchGroups(query)
 
+    FriendsSearchContent(
+        query         = query,
+        recent        = recent,
+        friendResults = friendResults,
+        groupResults  = groupResults,
+        onQueryChange = viewModel::onQueryChange,
+        onCancel      = onCancel,
+        onFriendTap   = { friend ->
+            viewModel.commitQueryToHistory()
+            onOpenMemberProfile(friend.id)
+        },
+        onGroupTap    = { group ->
+            viewModel.commitQueryToHistory()
+            onOpenGroupDetail(group.id)
+        }
+    )
+}
+
+/**
+ * Stateless body — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. FriendsSearchScreen above is the thin wrapper
+ * that wires the ViewModel and history-commit on tap.
+ */
+@Composable
+private fun FriendsSearchContent(
+    query:         String,
+    recent:        List<String>,
+    friendResults: List<Friend>,
+    groupResults:  List<GroupSummary>,
+    onQueryChange: (String) -> Unit,
+    onCancel:      () -> Unit,
+    onFriendTap:   (Friend) -> Unit,
+    onGroupTap:    (GroupSummary) -> Unit
+) {
     val focusRequester = remember { FocusRequester() }
     val keyboard       = LocalSoftwareKeyboardController.current
 
@@ -76,7 +112,7 @@ fun FriendsSearchScreen(
         ) {
             SearchFieldRow(
                 query           = query,
-                onQueryChange   = viewModel::onQueryChange,
+                onQueryChange   = onQueryChange,
                 focusRequester  = focusRequester,
                 placeholder     = "Search friends or groups",
                 onSearch        = { keyboard?.hide() },
@@ -91,20 +127,14 @@ fun FriendsSearchScreen(
             if (query.isBlank()) {
                 RecentSearches(
                     recent       = recent,
-                    onRecentTap  = { viewModel.onQueryChange(it) }
+                    onRecentTap  = onQueryChange
                 )
             } else {
                 ResultsList(
-                    friends             = friendResults,
-                    groups              = groupResults,
-                    onFriendTap         = { friend ->
-                        viewModel.commitQueryToHistory()
-                        onOpenMemberProfile(friend.id)
-                    },
-                    onGroupTap          = { group ->
-                        viewModel.commitQueryToHistory()
-                        onOpenGroupDetail(group.id)
-                    }
+                    friends     = friendResults,
+                    groups      = groupResults,
+                    onFriendTap = onFriendTap,
+                    onGroupTap  = onGroupTap
                 )
             }
         }
@@ -261,67 +291,88 @@ private fun ResultsList(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewFriends = listOf(
+    Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true,  avatarUrl = "", bio = ""),
+    Friend(id = "u2", name = "Adam Smith",   email = "adam@example.com", sharedMemories = 2, isOnline = false, avatarUrl = "", bio = "")
+)
+
+private val previewGroups = listOf(
+    GroupSummary(id = "g1", name = "Summer Trip",  memberCount = 5, memberAvatarUrls = emptyList(), memberNames = listOf("Ada", "Grace")),
+    GroupSummary(id = "g2", name = "Weekend Hike", memberCount = 3, memberAvatarUrls = emptyList(), memberNames = listOf("Ada"))
+)
+
+/** Empty query — shows the recent searches grid. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends search · recent")
 @Composable
 fun FriendsSearchScreenPreview() {
     MemoryCircleTheme {
-        FriendsSearchScreen(
-            onCancel             = {},
-            onOpenMemberProfile  = {},
-            onOpenGroupDetail    = {}
+        FriendsSearchContent(
+            query         = "",
+            recent        = listOf("ada", "grace", "summer", "trip", "alan", "linus", "weekend"),
+            friendResults = emptyList(),
+            groupResults  = emptyList(),
+            onQueryChange = {},
+            onCancel      = {},
+            onFriendTap   = {},
+            onGroupTap    = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Empty query, no recent history yet — shows the empty hint. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends search · no recent")
 @Composable
-fun RecentSearchesPreview() {
+fun FriendsSearchScreenNoRecentPreview() {
     MemoryCircleTheme {
-        RecentSearches(
-            recent = listOf("ada", "grace"),
-            onRecentTap = {}
+        FriendsSearchContent(
+            query         = "",
+            recent        = emptyList(),
+            friendResults = emptyList(),
+            groupResults  = emptyList(),
+            onQueryChange = {},
+            onCancel      = {},
+            onFriendTap   = {},
+            onGroupTap    = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Active query with both friend + group matches — shows the two sections. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends search · results")
 @Composable
-fun RecentChipPreview() {
+fun FriendsSearchScreenResultsPreview() {
     MemoryCircleTheme {
-        RecentChip(
-            text = "ada",
-            onClick = {}
+        FriendsSearchContent(
+            query         = "a",
+            recent        = emptyList(),
+            friendResults = previewFriends,
+            groupResults  = previewGroups,
+            onQueryChange = {},
+            onCancel      = {},
+            onFriendTap   = {},
+            onGroupTap    = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Active query but nothing matched — shows the "No results found." line. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends search · no results")
 @Composable
-fun ResultsListPreview() {
+fun FriendsSearchScreenNoResultsPreview() {
     MemoryCircleTheme {
-        ResultsList(
-            friends = listOf(
-                Friend(
-                    id = "u1",
-                    name = "Ada Lovelace",
-                    email = "ada@example.com",
-                    sharedMemories = 4,
-                    isOnline = true,
-                    avatarUrl = "",
-                    bio = ""
-                )
-            ),
-            groups = listOf(
-                GroupSummary(
-                    id = "g1",
-                    name = "Summer Trip",
-                    memberCount = 5,
-                    memberAvatarUrls = emptyList(),
-                    memberNames = listOf("Ada", "Grace")
-                )
-            ),
-            onFriendTap = {},
-            onGroupTap = {}
+        FriendsSearchContent(
+            query         = "xyz",
+            recent        = emptyList(),
+            friendResults = emptyList(),
+            groupResults  = emptyList(),
+            onQueryChange = {},
+            onCancel      = {},
+            onFriendTap   = {},
+            onGroupTap    = {}
         )
     }
 }

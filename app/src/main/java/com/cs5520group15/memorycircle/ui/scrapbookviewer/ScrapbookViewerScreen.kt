@@ -69,6 +69,34 @@ fun ScrapbookViewerScreen(
         )
     }
 
+    ScrapbookViewerContent(
+        monthTitle        = monthTitle,
+        entries           = entries,
+        onBack            = onBack,
+        onOpenGroupDetail = onOpenGroupDetail,
+        onAddTimePoint    = onAddTimePoint,
+        onSaveTitle       = { entryId, title -> viewModel.updateEntryTitle(entryId, title) },
+        onPostComment     = { entryId, text  -> viewModel.addComment(entryId, author = "", text = text) },
+        onJoinEntry       = onJoinEntry
+    )
+}
+
+/**
+ * Stateless body — takes the entry list + callbacks so it renders in @Preview
+ * without touching Firebase. ScrapbookViewerScreen above is the thin wrapper
+ * that wires the ViewModel and the live ScrapbookRepository flow.
+ */
+@Composable
+private fun ScrapbookViewerContent(
+    monthTitle:        String,
+    entries:           List<ScrapbookEntry>,
+    onBack:            () -> Unit,
+    onOpenGroupDetail: () -> Unit,
+    onAddTimePoint:    () -> Unit,
+    onSaveTitle:       (entryId: String, title: String) -> Unit,
+    onPostComment:     (entryId: String, text: String) -> Unit,
+    onJoinEntry:       (String) -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -118,8 +146,8 @@ fun ScrapbookViewerScreen(
             items(entries, key = { it.id }) { entry ->
                 TimelineEntry(
                     entry         = entry,
-                    onSaveTitle   = { title -> viewModel.updateEntryTitle(entry.id, title) },
-                    onPostComment = { text -> viewModel.addComment(entry.id, author = "", text = text) },
+                    onSaveTitle   = { title -> onSaveTitle(entry.id, title) },
+                    onPostComment = { text  -> onPostComment(entry.id, text) },
                     onJoin        = { onJoinEntry(entry.id) }
                 )
             }
@@ -391,95 +419,123 @@ private fun CommentRow(comment: Comment) {
     }
 }
 
-@Preview(showBackground = true)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewPhoto = Photo(
+    photoId           = "p1",
+    url               = "",
+    storagePath       = "",
+    description       = "Sunset at the lake",
+    uploaderId        = "u1",
+    uploaderName      = "Ada",
+    uploaderAvatarUrl = ""
+)
+
+private val previewSecondPhoto = Photo(
+    photoId           = "p2",
+    url               = "",
+    storagePath       = "",
+    description       = "From my side",
+    uploaderId        = "u2",
+    uploaderName      = "Grace",
+    uploaderAvatarUrl = ""
+)
+
+private val previewComment = Comment(
+    id              = "c1",
+    authorId        = "u1",
+    authorName      = "Ada Lovelace",
+    authorAvatarUrl = "",
+    text            = "So much fun!"
+)
+
+private val previewSecondComment = Comment(
+    id              = "c2",
+    authorId        = "u2",
+    authorName      = "Grace Hopper",
+    authorAvatarUrl = "",
+    text            = "Loved the food."
+)
+
+private val previewEntries = listOf(
+    ScrapbookEntry(
+        id              = "e1",
+        authorId        = "u1",
+        authorName      = "Ada Lovelace",
+        authorAvatarUrl = "",
+        date            = "June 1",
+        title           = "Lakeside Picnic",
+        tags            = listOf("food", "park"),
+        photos          = listOf(previewPhoto, previewSecondPhoto),
+        comments        = listOf(previewComment, previewSecondComment),
+        commentCount    = 2
+    ),
+    ScrapbookEntry(
+        id              = "e2",
+        authorId        = "u2",
+        authorName      = "Grace Hopper",
+        authorAvatarUrl = "",
+        date            = "June 14",
+        title           = "Sunrise Hike",
+        tags            = listOf("hike"),
+        photos          = listOf(previewPhoto.copy(photoId = "p3", description = "Top of the hill")),
+        comments        = emptyList(),
+        commentCount    = 0
+    )
+)
+
+/** Default — multiple timeline entries with photos and comments. */
+@Preview(showBackground = true, name = "Scrapbook viewer · default")
 @Composable
 fun ScrapbookViewerScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookViewerScreen(
-            groupId           = "test",
+        ScrapbookViewerContent(
+            monthTitle        = "June 2025",
+            entries           = previewEntries,
             onBack            = {},
             onOpenGroupDetail = {},
             onAddTimePoint    = {},
+            onSaveTitle       = { _, _ -> },
+            onPostComment     = { _, _ -> },
             onJoinEntry       = {}
         )
     }
 }
 
-private val previewPhoto = Photo(
-    photoId = "p1",
-    url = "",
-    storagePath = "",
-    description = "Sunset at the lake",
-    uploaderId = "u1",
-    uploaderName = "Ada",
-    uploaderAvatarUrl = ""
-)
-
-private val previewComment = Comment(
-    id = "c1",
-    authorId = "u1",
-    authorName = "Ada Lovelace",
-    authorAvatarUrl = "",
-    text = "So much fun!"
-)
-
-private val previewEntry = ScrapbookEntry(
-    id = "e1",
-    authorId = "u1",
-    authorName = "Ada Lovelace",
-    authorAvatarUrl = "",
-    date = "June 1",
-    title = "Lakeside Picnic",
-    tags = listOf("food", "park"),
-    photos = listOf(previewPhoto),
-    comments = listOf(previewComment),
-    commentCount = 1
-)
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Single entry — one post on the timeline. */
+@Preview(showBackground = true, name = "Scrapbook viewer · single entry")
 @Composable
-fun TimelineEntryPreview() {
+fun ScrapbookViewerScreenSinglePreview() {
     MemoryCircleTheme {
-        TimelineEntry(
-            entry = previewEntry,
-            onSaveTitle = {},
-            onPostComment = {},
-            onJoin = {}
+        ScrapbookViewerContent(
+            monthTitle        = "June 2025",
+            entries           = listOf(previewEntries.first()),
+            onBack            = {},
+            onOpenGroupDetail = {},
+            onAddTimePoint    = {},
+            onSaveTitle       = { _, _ -> },
+            onPostComment     = { _, _ -> },
+            onJoinEntry       = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Empty — month with no entries yet. */
+@Preview(showBackground = true, name = "Scrapbook viewer · empty")
 @Composable
-fun MemoryCardPreview() {
+fun ScrapbookViewerScreenEmptyPreview() {
     MemoryCircleTheme {
-        MemoryCard(
-            entry = previewEntry,
-            onSaveTitle = {},
-            onPostComment = {},
-            onJoin = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun PhotoBlockPreview() {
-    MemoryCircleTheme {
-        PhotoBlock(
-            photo = previewPhoto,
-            fallbackName = "Ada Lovelace",
-            fallbackAvatarUrl = ""
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun CommentRowPreview() {
-    MemoryCircleTheme {
-        CommentRow(
-            comment = previewComment
+        ScrapbookViewerContent(
+            monthTitle        = "June 2025",
+            entries           = emptyList(),
+            onBack            = {},
+            onOpenGroupDetail = {},
+            onAddTimePoint    = {},
+            onSaveTitle       = { _, _ -> },
+            onPostComment     = { _, _ -> },
+            onJoinEntry       = {}
         )
     }
 }

@@ -149,13 +149,36 @@ private fun ProfileContent(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+/** Default — name + bio + email all set. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Profile · default")
 @Composable
 fun ProfileScreenPreview() {
     MemoryCircleTheme {
         ProfileContent(
             name              = "Ada Lovelace",
             bio               = "Loves hiking and old maps.",
+            email             = "ada@example.com",
+            avatarUrl         = "",
+            currentRoute      = "profile",
+            onNavigate        = {},
+            onOpenEditProfile = {},
+            onOpenSettings    = {}
+        )
+    }
+}
+
+/** Empty bio — shows the "Tap Edit Profile to add a bio." placeholder. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Profile · empty bio")
+@Composable
+fun ProfileScreenEmptyBioPreview() {
+    MemoryCircleTheme {
+        ProfileContent(
+            name              = "Ada Lovelace",
+            bio               = "",
             email             = "ada@example.com",
             avatarUrl         = "",
             currentRoute      = "profile",

@@ -161,27 +161,58 @@ private fun HomeContent(
     }
 }
 
-@Preview(showBackground = true)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewGroups = listOf(
+    HomeViewModel.Group(
+        id          = "g1",
+        name        = "Summer Trip",
+        date        = "5 members",
+        memoryCount = 12,
+        colorType   = "brown"
+    ),
+    HomeViewModel.Group(
+        id          = "g2",
+        name        = "Family",
+        date        = "3 members",
+        memoryCount = 7,
+        colorType   = "sage"
+    ),
+    HomeViewModel.Group(
+        id          = "g3",
+        name        = "Weekend Hike",
+        date        = "4 members",
+        memoryCount = 3,
+        colorType   = "brown"
+    )
+)
+
+/** Default — signed-in user with a few groups. */
+@Preview(showBackground = true, name = "Home · default")
 @Composable
 fun HomeScreenPreview() {
     MemoryCircleTheme {
         HomeContent(
-            groups = listOf(
-                HomeViewModel.Group(
-                    id          = "g1",
-                    name        = "Summer Trip",
-                    date        = "5 members",
-                    memoryCount = 12,
-                    colorType   = "brown"
-                ),
-                HomeViewModel.Group(
-                    id          = "g2",
-                    name        = "Family",
-                    date        = "3 members",
-                    memoryCount = 7,
-                    colorType   = "sage"
-                )
-            ),
+            groups        = previewGroups,
+            userName      = "Ada",
+            avatarUrl     = "",
+            currentRoute  = "home",
+            onNavigate    = {},
+            onCreateGroup = {},
+            onOpenGroup   = {}
+        )
+    }
+}
+
+/** Empty groups — new user has not joined / created any group yet. */
+@Preview(showBackground = true, name = "Home · empty")
+@Composable
+fun HomeScreenEmptyPreview() {
+    MemoryCircleTheme {
+        HomeContent(
+            groups        = emptyList(),
             userName      = "Ada",
             avatarUrl     = "",
             currentRoute  = "home",

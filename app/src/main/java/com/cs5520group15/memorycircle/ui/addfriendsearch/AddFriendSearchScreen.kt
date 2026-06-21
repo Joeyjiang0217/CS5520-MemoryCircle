@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.data.NetworkUtil
+import com.cs5520group15.memorycircle.model.Friend
 import com.cs5520group15.memorycircle.ui.common.AcceptPill
 import com.cs5520group15.memorycircle.ui.common.AvatarListRow
 import com.cs5520group15.memorycircle.ui.common.EmptyHint
@@ -64,15 +65,9 @@ fun AddFriendSearchScreen(
     val outgoing    by viewModel.outgoingRequests.collectAsStateWithLifecycle()
     val friendIds   = remember(friends) { friends.map { it.id }.toSet() }
 
-    val showResults = submitted.isNotBlank() && submitted == query
-
-    val focusRequester    = remember { FocusRequester() }
-    val keyboard          = LocalSoftwareKeyboardController.current
     val context           = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope             = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -82,6 +77,68 @@ fun AddFriendSearchScreen(
             }
         }
     }
+
+    AddFriendSearchContent(
+        query             = query,
+        submitted         = submitted,
+        results           = results,
+        isSearching       = isSearching,
+        isAdding          = isAdding,
+        friendIds         = friendIds,
+        outgoing          = outgoing,
+        snackbarHostState = snackbarHostState,
+        onQueryChange     = viewModel::onQueryChange,
+        onSubmit          = {
+            if (NetworkUtil.isOnline(context)) {
+                viewModel.submit()
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                }
+            }
+        },
+        onCancel             = onCancel,
+        onOpenMemberProfile  = onOpenMemberProfile,
+        onSendFriendRequest  = { userId ->
+            // Sending a request is a write — gate on network the same as
+            // Submit so we don't silently queue into the offline cache.
+            if (NetworkUtil.isOnline(context)) {
+                viewModel.sendFriendRequest(userId)
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                }
+            }
+        }
+    )
+}
+
+/**
+ * Stateless content — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. The stateful AddFriendSearchScreen above is the
+ * thin wrapper that wires the ViewModel and connectivity checks.
+ */
+@Composable
+private fun AddFriendSearchContent(
+    query:               String,
+    submitted:           String,
+    results:             List<Friend>,
+    isSearching:         Boolean,
+    isAdding:            Set<String>,
+    friendIds:           Set<String>,
+    outgoing:            Set<String>,
+    snackbarHostState:   SnackbarHostState,
+    onQueryChange:       (String) -> Unit,
+    onSubmit:            () -> Unit,
+    onCancel:            () -> Unit,
+    onOpenMemberProfile: (String) -> Unit,
+    onSendFriendRequest: (String) -> Unit
+) {
+    val showResults    = submitted.isNotBlank() && submitted == query
+    val focusRequester = remember { FocusRequester() }
+    val keyboard       = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     Scaffold(
         containerColor = Cream,
@@ -95,18 +152,12 @@ fun AddFriendSearchScreen(
         ) {
             SearchFieldRow(
                 query          = query,
-                onQueryChange  = viewModel::onQueryChange,
+                onQueryChange  = onQueryChange,
                 focusRequester = focusRequester,
                 placeholder    = "Email or username",
                 onSearch       = {
                     keyboard?.hide()
-                    if (NetworkUtil.isOnline(context)) {
-                        viewModel.submit()
-                    } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
-                        }
-                    }
+                    onSubmit()
                 },
                 onCancel       = {
                     keyboard?.hide()
@@ -146,19 +197,7 @@ fun AddFriendSearchScreen(
                                         user.id in isAdding   -> LockedPill(label = "Sending…")
                                         else                  -> AcceptPill(
                                             label   = "Add",
-                                            onClick = {
-                                                // Sending a request is a write —
-                                                // gate on network the same as
-                                                // Submit so we don't silently
-                                                // queue into the offline cache.
-                                                if (NetworkUtil.isOnline(context)) {
-                                                    viewModel.sendFriendRequest(user.id)
-                                                } else {
-                                                    scope.launch {
-                                                        snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
-                                                    }
-                                                }
-                                            }
+                                            onClick = { onSendFriendRequest(user.id) }
                                         )
                                     }
                                 }
@@ -176,9 +215,61 @@ fun AddFriendSearchScreen(
 @Composable
 fun AddFriendSearchScreenPreview() {
     MemoryCircleTheme {
-        AddFriendSearchScreen(
+        AddFriendSearchContent(
+            query             = "ada",
+            submitted         = "ada",
+            results           = listOf(
+                Friend(
+                    id = "u1",
+                    name = "Ada Lovelace",
+                    email = "a***@example.com",
+                    sharedMemories = 0,
+                    isOnline = false,
+                    avatarUrl = "",
+                    bio = ""
+                ),
+                Friend(
+                    id = "u2",
+                    name = "Adam Smith",
+                    email = "a***@example.com",
+                    sharedMemories = 0,
+                    isOnline = false,
+                    avatarUrl = "",
+                    bio = ""
+                )
+            ),
+            isSearching       = false,
+            isAdding          = emptySet(),
+            friendIds         = setOf("u2"),
+            outgoing          = emptySet(),
+            snackbarHostState = remember { SnackbarHostState() },
+            onQueryChange       = {},
+            onSubmit            = {},
             onCancel            = {},
-            onOpenMemberProfile = {}
+            onOpenMemberProfile = {},
+            onSendFriendRequest = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+@Composable
+fun AddFriendSearchScreenEmptyPreview() {
+    MemoryCircleTheme {
+        AddFriendSearchContent(
+            query             = "",
+            submitted         = "",
+            results           = emptyList(),
+            isSearching       = false,
+            isAdding          = emptySet(),
+            friendIds         = emptySet(),
+            outgoing          = emptySet(),
+            snackbarHostState = remember { SnackbarHostState() },
+            onQueryChange       = {},
+            onSubmit            = {},
+            onCancel            = {},
+            onOpenMemberProfile = {},
+            onSendFriendRequest = {}
         )
     }
 }

@@ -80,15 +80,6 @@ fun GroupDetailScreen(
     val isWorking by viewModel.isWorking.collectAsStateWithLifecycle()
     val currentUid = remember { AuthRepository.currentUid }
 
-    var showLeaveDialog       by remember { mutableStateOf(false) }
-    var showDeleteGroupDialog by remember { mutableStateOf(false) }
-    var memberToKick          by remember { mutableStateOf<Member?>(null) }
-    // Owner-only "delete members" mode. While true, every non-self member
-    // thumbnail shows a red × badge that triggers the kick-confirm dialog.
-    // While false (default), the avatars stay clean — fixes the easy-to-mistap
-    // problem when users just want to tap through to a member profile.
-    var inMembersEditMode     by remember { mutableStateOf(false) }
-
     val context           = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val snackScope        = rememberCoroutineScope()
@@ -123,6 +114,63 @@ fun GroupDetailScreen(
         }
     }
 
+    GroupDetailContent(
+        groupName           = groupName,
+        members             = members,
+        months              = months,
+        isOwner             = isOwner,
+        isWorking           = isWorking,
+        currentUid          = currentUid,
+        snackbarHostState   = snackbarHostState,
+        onBack              = onBack,
+        onOpenAllMembers    = onOpenAllMembers,
+        onOpenMemberProfile = onOpenMemberProfile,
+        onInviteMember      = onInviteMember,
+        onOpenScrapbook     = { month, year -> onOpenScrapbook(groupId, month, year) },
+        onRenameGroup       = viewModel::renameGroup,
+        onKickMember        = { id -> runOnline { viewModel.kickMember(id) } },
+        onLeaveGroup        = { runOnline { viewModel.leaveGroup(onDone = onLeftGroup) } },
+        onDeleteGroup       = { runOnline { viewModel.deleteGroup(onDone = onLeftGroup) } }
+    )
+}
+
+/**
+ * Stateless body — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. GroupDetailScreen above is the thin wrapper that
+ * wires the ViewModel, the offline-write gate, and one-shot events.
+ */
+@Composable
+private fun GroupDetailContent(
+    groupName:           String,
+    members:             List<Member>,
+    months:              List<GroupDetailViewModel.MonthScrapbook>,
+    isOwner:             Boolean,
+    isWorking:           Boolean,
+    currentUid:          String?,
+    snackbarHostState:   SnackbarHostState,
+    onBack:              () -> Unit,
+    onOpenAllMembers:    () -> Unit,
+    onOpenMemberProfile: (String) -> Unit,
+    onInviteMember:      () -> Unit,
+    onOpenScrapbook:     (month: String, year: String) -> Unit,
+    onRenameGroup:       (String) -> Unit,
+    onKickMember:        (String) -> Unit,
+    onLeaveGroup:        () -> Unit,
+    onDeleteGroup:       () -> Unit,
+    initialShowLeaveDialog:       Boolean = false,
+    initialShowDeleteGroupDialog: Boolean = false,
+    initialMemberToKick:          Member? = null,
+    initialInEditMode:            Boolean = false
+) {
+    var showLeaveDialog       by remember { mutableStateOf(initialShowLeaveDialog) }
+    var showDeleteGroupDialog by remember { mutableStateOf(initialShowDeleteGroupDialog) }
+    var memberToKick          by remember { mutableStateOf(initialMemberToKick) }
+    // Owner-only "delete members" mode. While true, every non-self member
+    // thumbnail shows a red × badge that triggers the kick-confirm dialog.
+    // While false (default), the avatars stay clean — fixes the easy-to-mistap
+    // problem when users just want to tap through to a member profile.
+    var inMembersEditMode     by remember { mutableStateOf(initialInEditMode) }
+
     Scaffold(
         containerColor = Cream,
         snackbarHost   = { SnackbarHost(snackbarHostState) },
@@ -154,7 +202,7 @@ fun GroupDetailScreen(
                 GroupNameHero(
                     groupName    = groupName,
                     memberCount  = members.size,
-                    onRename     = { newName -> viewModel.renameGroup(newName) }
+                    onRename     = onRenameGroup
                 )
             }
 
@@ -207,7 +255,7 @@ fun GroupDetailScreen(
                     memoryCount  = month.memoryCount,
                     colorType    = month.colorType,
                     thumbnailUrl = month.thumbnailUrl,
-                    onClick      = { onOpenScrapbook(groupId, month.month, month.year) }
+                    onClick      = { onOpenScrapbook(month.month, month.year) }
                 )
             }
         }
@@ -223,7 +271,7 @@ fun GroupDetailScreen(
             confirmColor = Brown,
             onConfirm    = {
                 showLeaveDialog = false
-                runOnline { viewModel.leaveGroup(onDone = onLeftGroup) }
+                onLeaveGroup()
             },
             onDismiss    = { showLeaveDialog = false }
         )
@@ -238,7 +286,7 @@ fun GroupDetailScreen(
             confirmColor = DeleteRed,
             onConfirm    = {
                 showDeleteGroupDialog = false
-                runOnline { viewModel.deleteGroup(onDone = onLeftGroup) }
+                onDeleteGroup()
             },
             onDismiss    = { showDeleteGroupDialog = false }
         )
@@ -253,7 +301,7 @@ fun GroupDetailScreen(
             confirmColor = DeleteRed,
             onConfirm    = {
                 memberToKick = null
-                runOnline { viewModel.kickMember(member.id) }
+                onKickMember(member.id)
             },
             onDismiss    = { memberToKick = null }
         )
@@ -590,102 +638,152 @@ private fun RemoveThumbnail(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewMembers = listOf(
+    Member(id = "m1", name = "Ada Lovelace",      sharedMemories = 3, isOnline = true,  avatarUrl = "", bio = ""),
+    Member(id = "m2", name = "Grace Hopper",      sharedMemories = 1, isOnline = false, avatarUrl = "", bio = ""),
+    Member(id = "m3", name = "Alan Turing",       sharedMemories = 0, isOnline = true,  avatarUrl = "", bio = ""),
+    Member(id = "m4", name = "Linus Torvalds",    sharedMemories = 2, isOnline = false, avatarUrl = "", bio = ""),
+    Member(id = "m5", name = "Margaret Hamilton", sharedMemories = 4, isOnline = false, avatarUrl = "", bio = "")
+)
+
+private val previewMonths = listOf(
+    GroupDetailViewModel.MonthScrapbook(id = "2025-08", month = "August",    year = "2025", memoryCount = 12, colorType = "brown"),
+    GroupDetailViewModel.MonthScrapbook(id = "2025-07", month = "July",      year = "2025", memoryCount = 8,  colorType = "sage"),
+    GroupDetailViewModel.MonthScrapbook(id = "2025-06", month = "June",      year = "2025", memoryCount = 5,  colorType = "brown")
+)
+
+/** Owner view — sees Delete group + Remove tile in the members grid. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group detail · owner")
 @Composable
 fun GroupDetailScreenPreview() {
     MemoryCircleTheme {
-        GroupDetailScreen(
-            groupId             = "1",
+        GroupDetailContent(
+            groupName           = "Weekend Hikers",
+            members             = previewMembers,
+            months              = previewMonths,
+            isOwner             = true,
+            isWorking           = false,
+            currentUid          = "m1",
+            snackbarHostState   = remember { SnackbarHostState() },
             onBack              = {},
             onOpenAllMembers    = {},
             onOpenMemberProfile = {},
             onInviteMember      = {},
-            onOpenScrapbook     = { _, _, _ -> }
+            onOpenScrapbook     = { _, _ -> },
+            onRenameGroup       = {},
+            onKickMember        = {},
+            onLeaveGroup        = {},
+            onDeleteGroup       = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Non-owner view — only Leave group is shown; no Delete, no Remove tile. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group detail · member")
 @Composable
-fun GroupNameHeroPreview() {
+fun GroupDetailScreenMemberPreview() {
     MemoryCircleTheme {
-        GroupNameHero(
-            groupName   = "Weekend Hikers",
-            memberCount = 4,
-            onRename    = {}
+        GroupDetailContent(
+            groupName           = "Weekend Hikers",
+            members             = previewMembers,
+            months              = previewMonths,
+            isOwner             = false,
+            isWorking           = false,
+            currentUid          = "m2",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onOpenAllMembers    = {},
+            onOpenMemberProfile = {},
+            onInviteMember      = {},
+            onOpenScrapbook     = { _, _ -> },
+            onRenameGroup       = {},
+            onKickMember        = {},
+            onLeaveGroup        = {},
+            onDeleteGroup       = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Owner with edit mode active — × badges sit on every non-self thumbnail. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group detail · edit mode")
 @Composable
-fun MembersCardPreview() {
+fun GroupDetailScreenEditModePreview() {
     MemoryCircleTheme {
-        MembersCard(
-            members          = listOf(
-                Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
-                Member(id = "m2", name = "Grace Hopper", sharedMemories = 1)
-            ),
-            isOwner          = true,
-            currentUid       = "m1",
-            inEditMode       = false,
-            onMemberClick    = {},
-            onSeeAllClick    = {},
-            onInviteClick    = {},
-            onToggleEditMode = {},
-            onKickMember     = {}
+        GroupDetailContent(
+            groupName           = "Weekend Hikers",
+            members             = previewMembers,
+            months              = previewMonths,
+            isOwner             = true,
+            isWorking           = false,
+            currentUid          = "m1",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onOpenAllMembers    = {},
+            onOpenMemberProfile = {},
+            onInviteMember      = {},
+            onOpenScrapbook     = { _, _ -> },
+            onRenameGroup       = {},
+            onKickMember        = {},
+            onLeaveGroup        = {},
+            onDeleteGroup       = {},
+            initialInEditMode   = true
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Leave-group confirmation dialog open. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group detail · leave dialog")
 @Composable
-fun ThumbnailGridPreview() {
+fun GroupDetailScreenLeaveDialogPreview() {
     MemoryCircleTheme {
-        ThumbnailGrid(
-            members          = listOf(
-                Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
-                Member(id = "m2", name = "Grace Hopper", sharedMemories = 1)
-            ),
-            isOwner          = true,
-            currentUid       = "m1",
-            inEditMode       = false,
-            onMemberClick    = {},
-            onInviteClick    = {},
-            onToggleEditMode = {},
-            onKickMember     = {}
+        GroupDetailContent(
+            groupName              = "Weekend Hikers",
+            members                = previewMembers,
+            months                 = previewMonths,
+            isOwner                = false,
+            isWorking              = false,
+            currentUid             = "m2",
+            snackbarHostState      = remember { SnackbarHostState() },
+            onBack                 = {},
+            onOpenAllMembers       = {},
+            onOpenMemberProfile    = {},
+            onInviteMember         = {},
+            onOpenScrapbook        = { _, _ -> },
+            onRenameGroup          = {},
+            onKickMember           = {},
+            onLeaveGroup           = {},
+            onDeleteGroup          = {},
+            initialShowLeaveDialog = true
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Working spinner overlay — destructive op in flight. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group detail · working")
 @Composable
-fun MemberThumbnailPreview() {
+fun GroupDetailScreenWorkingPreview() {
     MemoryCircleTheme {
-        MemberThumbnail(
-            member      = Member(id = "m1", name = "Ada Lovelace", sharedMemories = 3, isOnline = true, avatarUrl = "", bio = ""),
-            onClick     = {},
-            showKick    = false,
-            onKickClick = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun InviteThumbnailPreview() {
-    MemoryCircleTheme {
-        InviteThumbnail(onClick = {})
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun RemoveThumbnailPreview() {
-    MemoryCircleTheme {
-        RemoveThumbnail(
-            active  = false,
-            onClick = {}
+        GroupDetailContent(
+            groupName           = "Weekend Hikers",
+            members             = previewMembers,
+            months              = previewMonths,
+            isOwner             = true,
+            isWorking           = true,
+            currentUid          = "m1",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onOpenAllMembers    = {},
+            onOpenMemberProfile = {},
+            onInviteMember      = {},
+            onOpenScrapbook     = { _, _ -> },
+            onRenameGroup       = {},
+            onKickMember        = {},
+            onLeaveGroup        = {},
+            onDeleteGroup       = {}
         )
     }
 }

@@ -45,6 +45,22 @@ fun MemberProfileScreen(
     LaunchedEffect(userId) { viewModel.bind(userId) }
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MemberProfileContent(
+        state  = state,
+        onBack = onBack
+    )
+}
+
+/**
+ * Stateless body — takes the UiState + callbacks so it renders in @Preview
+ * without touching Firebase. MemberProfileScreen above is the thin wrapper
+ * that wires the ViewModel.
+ */
+@Composable
+private fun MemberProfileContent(
+    state:  MemberProfileViewModel.UiState,
+    onBack: () -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -55,7 +71,7 @@ fun MemberProfileScreen(
             )
         }
     ) { padding ->
-        when (val s = state) {
+        when (state) {
             MemberProfileViewModel.UiState.Loading -> {
                 Box(
                     modifier         = Modifier.fillMaxSize().padding(padding),
@@ -79,7 +95,7 @@ fun MemberProfileScreen(
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val m = s.info
+                    val m = state.info
                     Spacer(modifier = Modifier.height(40.dp))
 
                     AvatarCircle(
@@ -122,10 +138,62 @@ fun MemberProfileScreen(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewMemberInfo = MemberProfileViewModel.MemberInfo(
+    id          = "u1",
+    name        = "Ada Lovelace",
+    emailMasked = "a***@example.com",
+    bio         = "Loves the analytical engine and analytical numbers.",
+    avatarUrl   = ""
+)
+
+/** Loaded — profile fully resolved. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Member profile · loaded")
 @Composable
 fun MemberProfileScreenPreview() {
     MemoryCircleTheme {
-        MemberProfileScreen(userId = "u_emma", onBack = {})
+        MemberProfileContent(
+            state  = MemberProfileViewModel.UiState.Loaded(previewMemberInfo),
+            onBack = {}
+        )
+    }
+}
+
+/** Loaded with empty bio — only the name + masked email show. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Member profile · no bio")
+@Composable
+fun MemberProfileScreenNoBioPreview() {
+    MemoryCircleTheme {
+        MemberProfileContent(
+            state  = MemberProfileViewModel.UiState.Loaded(previewMemberInfo.copy(bio = "")),
+            onBack = {}
+        )
+    }
+}
+
+/** Loading spinner — profile fetch in flight. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Member profile · loading")
+@Composable
+fun MemberProfileScreenLoadingPreview() {
+    MemoryCircleTheme {
+        MemberProfileContent(
+            state  = MemberProfileViewModel.UiState.Loading,
+            onBack = {}
+        )
+    }
+}
+
+/** Not-found state — uid resolved to no document. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Member profile · not found")
+@Composable
+fun MemberProfileScreenNotFoundPreview() {
+    MemoryCircleTheme {
+        MemberProfileContent(
+            state  = MemberProfileViewModel.UiState.NotFound,
+            onBack = {}
+        )
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.cs5520group15.memorycircle.model.Member
 import com.cs5520group15.memorycircle.ui.common.AvatarListRow
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.common.SectionHeader
@@ -46,6 +47,26 @@ fun GroupMembersScreen(
     val groupName by viewModel.groupName.collectAsStateWithLifecycle()
     val members   by viewModel.members.collectAsStateWithLifecycle()
 
+    GroupMembersContent(
+        groupName           = groupName,
+        members             = members,
+        onBack              = onBack,
+        onOpenMemberProfile = onOpenMemberProfile
+    )
+}
+
+/**
+ * Stateless body — takes the group name + member list + callbacks so it renders
+ * in @Preview without touching Firebase. GroupMembersScreen above is the thin
+ * wrapper that wires the ViewModel.
+ */
+@Composable
+private fun GroupMembersContent(
+    groupName:           String,
+    members:             List<Member>,
+    onBack:              () -> Unit,
+    onOpenMemberProfile: (String) -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -112,20 +133,39 @@ private fun GroupHeader(groupName: String, memberCount: Int) {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun GroupHeaderPreview() {
-    MemoryCircleTheme {
-        GroupHeader(groupName = "Summer Trip", memberCount = 5)
-    }
-}
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+private val previewMembers = listOf(
+    Member(id = "m1", name = "Ada Lovelace",      sharedMemories = 3, isOnline = true,  avatarUrl = "", bio = "Loves the analytical engine"),
+    Member(id = "m2", name = "Grace Hopper",      sharedMemories = 1, isOnline = false, avatarUrl = "", bio = "Cobol & compilers"),
+    Member(id = "m3", name = "Alan Turing",       sharedMemories = 0, isOnline = true,  avatarUrl = "", bio = ""),
+    Member(id = "m4", name = "Linus Torvalds",    sharedMemories = 2, isOnline = false, avatarUrl = "", bio = "")
+)
+
+/** Default — full roster. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group members · default")
 @Composable
 fun GroupMembersScreenPreview() {
     MemoryCircleTheme {
-        GroupMembersScreen(
-            groupId             = "1",
+        GroupMembersContent(
+            groupName           = "Summer Trip",
+            members             = previewMembers,
+            onBack              = {},
+            onOpenMemberProfile = {}
+        )
+    }
+}
+
+/** Empty roster — header only, no MEMBERS section. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Group members · empty")
+@Composable
+fun GroupMembersScreenEmptyPreview() {
+    MemoryCircleTheme {
+        GroupMembersContent(
+            groupName           = "Empty Group",
+            members             = emptyList(),
             onBack              = {},
             onOpenMemberProfile = {}
         )

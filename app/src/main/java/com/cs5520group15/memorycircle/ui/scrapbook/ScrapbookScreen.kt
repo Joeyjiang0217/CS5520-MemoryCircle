@@ -81,12 +81,63 @@ fun ScrapbookScreen(
     }
     val today = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM d", Locale.ENGLISH)) }
 
-    var newTagInput by remember { mutableStateOf("") }
-    var showAddTag  by remember { mutableStateOf(false) }
-
     val pickPhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) viewModel.onPhotoSelected(uri.toString()) }
+
+    val onPickPhoto: () -> Unit = {
+        pickPhoto.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+
+    ScrapbookContent(
+        title             = title,
+        description       = description,
+        tags              = tags,
+        photoUri          = photoUri,
+        isSaving          = isSaving,
+        isJoinMode        = isJoinMode,
+        canSave           = viewModel.canSave,
+        today             = today,
+        snackbarHostState = snackbarHostState,
+        onBack            = onBack,
+        onTitleChange     = viewModel::onTitleChange,
+        onDescriptionChange = viewModel::onDescriptionChange,
+        onAddTag          = viewModel::onAddTag,
+        onRemoveTag       = viewModel::onRemoveTag,
+        onPickPhoto       = onPickPhoto,
+        onSave            = { viewModel.save(groupId, today) }
+    )
+}
+
+/**
+ * Stateless body — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. ScrapbookScreen above is the thin wrapper that
+ * wires the ViewModel, system PhotoPicker, and event collection.
+ */
+@Composable
+private fun ScrapbookContent(
+    title:               String,
+    description:         String,
+    tags:                List<String>,
+    photoUri:            String?,
+    isSaving:            Boolean,
+    isJoinMode:          Boolean,
+    canSave:             Boolean,
+    today:               String,
+    snackbarHostState:   SnackbarHostState,
+    onBack:              () -> Unit,
+    onTitleChange:       (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onAddTag:            (String) -> Unit,
+    onRemoveTag:         (String) -> Unit,
+    onPickPhoto:         () -> Unit,
+    onSave:              () -> Unit,
+    initialShowAddTag:   Boolean = false
+) {
+    var newTagInput by remember { mutableStateOf("") }
+    var showAddTag  by remember { mutableStateOf(initialShowAddTag) }
 
     val fieldColors = brandFieldColors()
 
@@ -132,7 +183,7 @@ fun ScrapbookScreen(
                 } else {
                     OutlinedTextField(
                         value         = title,
-                        onValueChange = viewModel::onTitleChange,
+                        onValueChange = onTitleChange,
                         modifier      = Modifier.fillMaxWidth(),
                         singleLine    = true,
                         shape         = RoundedCornerShape(12.dp),
@@ -161,7 +212,7 @@ fun ScrapbookScreen(
                         }
                     } else {
                         tags.forEach { tag ->
-                            TagChip(label = tag, onRemove = { viewModel.onRemoveTag(tag) })
+                            TagChip(label = tag, onRemove = { onRemoveTag(tag) })
                         }
                         if (!showAddTag) {
                             AddTagChip(onClick = { showAddTag = true })
@@ -185,7 +236,7 @@ fun ScrapbookScreen(
                             colors        = fieldColors
                         )
                         TextButton(onClick = {
-                            viewModel.onAddTag(newTagInput)
+                            onAddTag(newTagInput)
                             newTagInput = ""
                             showAddTag  = false
                         }) {
@@ -197,8 +248,7 @@ fun ScrapbookScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SectionHeader(text = "YOUR PHOTO")
-                val currentPhoto = photoUri
-                if (currentPhoto == null) {
+                if (photoUri == null) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -206,34 +256,22 @@ fun ScrapbookScreen(
                             .height(180.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .border(1.5.dp, Beige, RoundedCornerShape(16.dp))
-                            .clickable {
-                                pickPhoto.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
+                            .clickable { onPickPhoto() }
                     ) {
                         Text("📷  Choose from album", color = Brown, style = MaterialTheme.typography.bodyLarge)
                     }
                 } else {
                     AsyncImage(
-                        model              = currentPhoto,
+                        model              = photoUri,
                         contentDescription = "Selected photo",
                         contentScale       = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(220.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .clickable {
-                                pickPhoto.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
+                            .clickable { onPickPhoto() }
                     )
-                    TextButton(onClick = {
-                        pickPhoto.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }) {
+                    TextButton(onClick = onPickPhoto) {
                         Text("Change photo", color = AccentGreen)
                     }
                 }
@@ -243,7 +281,7 @@ fun ScrapbookScreen(
                 SectionHeader(text = "YOUR DESCRIPTION")
                 OutlinedTextField(
                     value         = description,
-                    onValueChange = viewModel::onDescriptionChange,
+                    onValueChange = onDescriptionChange,
                     modifier      = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
@@ -263,8 +301,8 @@ fun ScrapbookScreen(
 
             PrimaryButton(
                 label   = if (isJoinMode) "✦  Add to Timeline" else "✦  Create Memory",
-                onClick = { viewModel.save(groupId, today) },
-                enabled = viewModel.canSave && !isSaving,
+                onClick = onSave,
+                enabled = canSave && !isSaving,
                 loading = isSaving
             )
 
@@ -275,10 +313,10 @@ fun ScrapbookScreen(
 
 /**
  * What: Displays a single tag as a removable chip.
- * Who: Called by ScrapbookScreen for each editable tag.
+ * Who: Called by ScrapbookContent for each editable tag.
  */
 @Composable
-fun TagChip(label: String, onRemove: () -> Unit) {
+private fun TagChip(label: String, onRemove: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -292,10 +330,10 @@ fun TagChip(label: String, onRemove: () -> Unit) {
 
 /**
  * What: Displays an inherited tag as a non-removable chip (join mode).
- * Who: Called by ScrapbookScreen when showing a creator's tags read-only.
+ * Who: Called by ScrapbookContent when showing a creator's tags read-only.
  */
 @Composable
-fun ReadOnlyTagChip(label: String) {
+private fun ReadOnlyTagChip(label: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -308,10 +346,10 @@ fun ReadOnlyTagChip(label: String) {
 
 /**
  * What: Displays a dashed "+ Add tag" chip button.
- * Who: Called by ScrapbookScreen to let users add new tags.
+ * Who: Called by ScrapbookContent to let users add new tags.
  */
 @Composable
-fun AddTagChip(onClick: () -> Unit) {
+private fun AddTagChip(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -323,34 +361,137 @@ fun AddTagChip(onClick: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+/** Default new-entry mode — empty form, photo placeholder visible. */
+@Preview(showBackground = true, name = "Scrapbook · new · empty")
 @Composable
 fun ScrapbookScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookScreen(groupId = "1", onBack = {})
+        ScrapbookContent(
+            title               = "",
+            description         = "",
+            tags                = emptyList(),
+            photoUri            = null,
+            isSaving            = false,
+            isJoinMode          = false,
+            canSave             = false,
+            today               = "August 21",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onTitleChange       = {},
+            onDescriptionChange = {},
+            onAddTag            = {},
+            onRemoveTag         = {},
+            onPickPhoto         = {},
+            onSave              = {}
+        )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** New-entry mode with content filled — title, tags, description set. */
+@Preview(showBackground = true, name = "Scrapbook · new · filled")
 @Composable
-fun TagChipPreview() {
+fun ScrapbookScreenFilledPreview() {
     MemoryCircleTheme {
-        TagChip(label = "park", onRemove = {})
+        ScrapbookContent(
+            title               = "Lakeside Picnic",
+            description         = "Beautiful sunset over the water with the whole gang.",
+            tags                = listOf("food", "park", "summer"),
+            photoUri            = null,
+            isSaving            = false,
+            isJoinMode          = false,
+            canSave             = true,
+            today               = "August 21",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onTitleChange       = {},
+            onDescriptionChange = {},
+            onAddTag            = {},
+            onRemoveTag         = {},
+            onPickPhoto         = {},
+            onSave              = {}
+        )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Add-tag input visible — user tapped the "+ Add tag" chip. */
+@Preview(showBackground = true, name = "Scrapbook · new · adding tag")
 @Composable
-fun ReadOnlyTagChipPreview() {
+fun ScrapbookScreenAddingTagPreview() {
     MemoryCircleTheme {
-        ReadOnlyTagChip(label = "food")
+        ScrapbookContent(
+            title               = "Lakeside Picnic",
+            description         = "",
+            tags                = listOf("food"),
+            photoUri            = null,
+            isSaving            = false,
+            isJoinMode          = false,
+            canSave             = false,
+            today               = "August 21",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onTitleChange       = {},
+            onDescriptionChange = {},
+            onAddTag            = {},
+            onRemoveTag         = {},
+            onPickPhoto         = {},
+            onSave              = {},
+            initialShowAddTag   = true
+        )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Join mode — title + tags inherited and shown read-only. */
+@Preview(showBackground = true, name = "Scrapbook · join mode")
 @Composable
-fun AddTagChipPreview() {
+fun ScrapbookScreenJoinModePreview() {
     MemoryCircleTheme {
-        AddTagChip(onClick = {})
+        ScrapbookContent(
+            title               = "Lakeside Picnic",
+            description         = "",
+            tags                = listOf("food", "park"),
+            photoUri            = null,
+            isSaving            = false,
+            isJoinMode          = true,
+            canSave             = false,
+            today               = "August 21",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onTitleChange       = {},
+            onDescriptionChange = {},
+            onAddTag            = {},
+            onRemoveTag         = {},
+            onPickPhoto         = {},
+            onSave              = {}
+        )
+    }
+}
+
+/** Saving spinner — save in flight. */
+@Preview(showBackground = true, name = "Scrapbook · saving")
+@Composable
+fun ScrapbookScreenSavingPreview() {
+    MemoryCircleTheme {
+        ScrapbookContent(
+            title               = "Lakeside Picnic",
+            description         = "Sunset photos",
+            tags                = listOf("food", "park"),
+            photoUri            = null,
+            isSaving            = true,
+            isJoinMode          = false,
+            canSave             = true,
+            today               = "August 21",
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onTitleChange       = {},
+            onDescriptionChange = {},
+            onAddTag            = {},
+            onRemoveTag         = {},
+            onPickPhoto         = {},
+            onSave              = {}
+        )
     }
 }

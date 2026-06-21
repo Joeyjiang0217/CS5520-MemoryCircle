@@ -70,7 +70,6 @@ import kotlinx.coroutines.launch
  * @param onOpenMemberProfile  navigates to a friend's profile (placeholder route)
  * @param onOpenGroupDetail    navigates to GroupDetail for the tapped group
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FriendsScreen(
     currentRoute:        String,
@@ -85,6 +84,67 @@ fun FriendsScreen(
     val friends     by viewModel.friends.collectAsStateWithLifecycle()
     val groups      by viewModel.groups.collectAsStateWithLifecycle()
     val allRequests by viewModel.requests.collectAsStateWithLifecycle()
+
+    val context           = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope             = rememberCoroutineScope()
+
+    // Delete-friend write goes through Firestore. Gate on connectivity so the
+    // call doesn't silently queue into the offline cache and look like it
+    // worked — matches the same pattern used on GroupDetail destructive ops.
+    val onDeleteFriend: (String) -> Unit = { friendId ->
+        if (NetworkUtil.isOnline(context)) {
+            viewModel.deleteFriend(friendId)
+        } else {
+            scope.launch {
+                snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+            }
+        }
+    }
+
+    FriendsContent(
+        currentRoute        = currentRoute,
+        friends             = friends,
+        groups              = groups,
+        allRequests         = allRequests,
+        snackbarHostState   = snackbarHostState,
+        onNavigate          = onNavigate,
+        onOpenSearch        = onOpenSearch,
+        onOpenAllRequests   = onOpenAllRequests,
+        onOpenAddFriend     = onOpenAddFriend,
+        onOpenMemberProfile = onOpenMemberProfile,
+        onOpenGroupDetail   = onOpenGroupDetail,
+        onAcceptRequest     = viewModel::acceptRequest,
+        onRejectRequest     = viewModel::rejectRequest,
+        onDeleteFriend      = onDeleteFriend
+    )
+}
+
+/**
+ * Stateless body — takes the live friend / group / request lists + callbacks
+ * so it renders in @Preview without touching Firebase. FriendsScreen above is
+ * the thin wrapper that wires the ViewModel and the offline-write gate.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FriendsContent(
+    currentRoute:        String,
+    friends:             List<Friend>,
+    groups:              List<GroupSummary>,
+    allRequests:         List<FriendRequest>,
+    snackbarHostState:   SnackbarHostState,
+    onNavigate:          (Any) -> Unit,
+    onOpenSearch:        () -> Unit,
+    onOpenAllRequests:   () -> Unit,
+    onOpenAddFriend:     () -> Unit,
+    onOpenMemberProfile: (String) -> Unit,
+    onOpenGroupDetail:   (String) -> Unit,
+    onAcceptRequest:     (String) -> Unit,
+    onRejectRequest:     (String) -> Unit,
+    onDeleteFriend:      (String) -> Unit,
+    initialSelectedTab:    ContactsTab = ContactsTab.FRIENDS,
+    initialPendingDeleteId: String? = null
+) {
     val pendingRequests = allRequests.filter { it.status == FriendRequest.Status.PENDING }
 
     val friendSections: List<Pair<Char, List<Friend>>> = remember(friends) {
@@ -95,13 +155,11 @@ fun FriendsScreen(
             .sortedWith(compareBy { sectionRank(it.first) })
     }
 
-    var selectedTab    by rememberSaveable { mutableStateOf(ContactsTab.FRIENDS) }
-    var pendingDeleteId by remember        { mutableStateOf<String?>(null) }
+    var selectedTab    by rememberSaveable { mutableStateOf(initialSelectedTab) }
+    var pendingDeleteId by remember        { mutableStateOf(initialPendingDeleteId) }
 
-    val listState         = rememberLazyListState()
-    val scope             = rememberCoroutineScope()
-    val context           = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
+    val scope     = rememberCoroutineScope()
 
     val tabBarHeightPx = with(LocalDensity.current) { 54.dp.roundToPx() }
 
@@ -171,8 +229,8 @@ fun FriendsScreen(
                 item(key = "requests") {
                     FriendRequestsSection(
                         pending   = pendingRequests,
-                        onAccept  = viewModel::acceptRequest,
-                        onReject  = viewModel::rejectRequest,
+                        onAccept  = onAcceptRequest,
+                        onReject  = onRejectRequest,
                         onOpenAll = onOpenAllRequests,
                         modifier  = Modifier.padding(horizontal = 24.dp)
                     )
@@ -266,19 +324,11 @@ fun FriendsScreen(
             onConfirm    = {
                 // Clear pendingDeleteId first so the SwipeToDismissBox snaps
                 // back via the existing LaunchedEffect, regardless of whether
-                // we actually issue the delete. Network gate matches the
-                // GroupDetail destructive ops: offline writes would otherwise
-                // silently queue into Firestore's offline cache and apply
-                // later — which is exactly the bug we just fixed there.
+                // we actually issue the delete. The network gate is handled
+                // upstream in onDeleteFriend.
                 val targetId = pendingFriend.id
                 pendingDeleteId = null
-                if (NetworkUtil.isOnline(context)) {
-                    viewModel.deleteFriend(targetId)
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
-                    }
-                }
+                onDeleteFriend(targetId)
             },
             onDismiss    = { pendingDeleteId = null }
         )
@@ -328,18 +378,6 @@ private fun Header(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun HeaderPreview() {
-    MemoryCircleTheme {
-        Header(
-            friendCount    = 12,
-            groupCount     = 3,
-            onAddFriendTap = {}
-        )
-    }
-}
-
 /**
  * What: The "FRIEND REQUESTS (N)" block on the Friends landing tab. Always
  *       renders the header + "See all ›" so the user can reach
@@ -348,7 +386,7 @@ fun HeaderPreview() {
  *       only renders when there's something to act on; the count `N`
  *       always tracks the PENDING total (actioned history doesn't inflate
  *       it).
- * Who: Called from FriendsScreen's LazyColumn.
+ * Who: Called from FriendsContent's LazyColumn.
  * When: Every recomposition of the Friends tab.
  */
 @Composable
@@ -385,29 +423,6 @@ private fun FriendRequestsSection(
                 onReject = { onReject(newest.id) }
             )
         }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun FriendRequestsSectionPreview() {
-    MemoryCircleTheme {
-        FriendRequestsSection(
-            pending   = listOf(
-                FriendRequest(
-                    id            = "r1",
-                    fromUserId    = "u9",
-                    fromUserName  = "Grace Hopper",
-                    fromUserEmail = "grace@example.com",
-                    mutualFriends = 2,
-                    status        = FriendRequest.Status.PENDING,
-                    fromUserBio   = ""
-                )
-            ),
-            onAccept  = {},
-            onReject  = {},
-            onOpenAll = {}
-        )
     }
 }
 
@@ -452,26 +467,6 @@ private fun FriendRequestCard(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun FriendRequestCardPreview() {
-    MemoryCircleTheme {
-        FriendRequestCard(
-            request  = FriendRequest(
-                id            = "r1",
-                fromUserId    = "u9",
-                fromUserName  = "Grace Hopper",
-                fromUserEmail = "grace@example.com",
-                mutualFriends = 2,
-                status        = FriendRequest.Status.PENDING,
-                fromUserBio   = ""
-            ),
-            onAccept = {},
-            onReject = {}
-        )
-    }
-}
-
 /**
  * Subtitle fallback for a friend-request row. Mutual-friend count wins when
  * we have one (currently always 0 — would require a friends ∩ friends scan
@@ -511,17 +506,6 @@ private fun ContactsTabRow(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ContactsTabRowPreview() {
-    MemoryCircleTheme {
-        ContactsTabRow(
-            selected = ContactsTab.FRIENDS,
-            onSelect = {}
-        )
-    }
-}
-
 @Composable
 private fun TabItem(
     label:    String,
@@ -549,18 +533,6 @@ private fun TabItem(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun TabItemPreview() {
-    MemoryCircleTheme {
-        TabItem(
-            label    = "Friends",
-            selected = true,
-            onClick  = {}
-        )
-    }
-}
-
 @Composable
 private fun SectionLetter(letter: Char) {
     Box(
@@ -574,14 +546,6 @@ private fun SectionLetter(letter: Char) {
             style = MaterialTheme.typography.labelSmall,
             color = InkSecondary
         )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun SectionLetterPreview() {
-    MemoryCircleTheme {
-        SectionLetter(letter = 'A')
     }
 }
 
@@ -617,18 +581,6 @@ private fun AlphabetIndex(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun AlphabetIndexPreview() {
-    MemoryCircleTheme {
-        AlphabetIndex(
-            availableLetters = setOf('A', 'B', 'C'),
-            onLetterTap      = {},
-            onStarTap        = {}
-        )
-    }
-}
-
 @Composable
 private fun IndexEntry(
     label:   String,
@@ -649,18 +601,6 @@ private fun IndexEntry(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun IndexEntryPreview() {
-    MemoryCircleTheme {
-        IndexEntry(
-            label   = "A",
-            enabled = true,
-            onClick = {}
-        )
-    }
-}
-
 /**
  * What: One swipeable friend row. Drag-from-end commits the SwipeToDismissBox
  *       to the EndToStart anchor and fires onSwipedAway, exposing the red
@@ -672,7 +612,7 @@ fun IndexEntryPreview() {
  *       Subtitle is intentionally blank when sharedMemories == 0 — showing
  *       "0 shared memories" on a brand-new friend reads as noise (the user
  *       saw nothing meaningful to count yet).
- * Who: Called by FriendsScreen.
+ * Who: Called by FriendsContent.
  * When: Rendered for every friend on the Friends tab.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -744,28 +684,6 @@ private fun SwipeableFriendRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun SwipeableFriendRowPreview() {
-    MemoryCircleTheme {
-        SwipeableFriendRow(
-            friend          = Friend(
-                id             = "u1",
-                name           = "Ada Lovelace",
-                email          = "ada@example.com",
-                sharedMemories = 4,
-                isOnline       = true,
-                avatarUrl      = "",
-                bio            = ""
-            ),
-            pendingDeleteId = null,
-            onClick         = {},
-            onSwipedAway    = {}
-        )
-    }
-}
-
 @Composable
 private fun FriendSwipeBackground() {
     Box(
@@ -784,26 +702,130 @@ private fun FriendSwipeBackground() {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun FriendSwipeBackgroundPreview() {
-    MemoryCircleTheme {
-        FriendSwipeBackground()
-    }
-}
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+private val previewFriends = listOf(
+    Friend(id = "u1", name = "Ada Lovelace",      email = "ada@example.com",     sharedMemories = 4, isOnline = true,  avatarUrl = "", bio = "Loves the analytical engine"),
+    Friend(id = "u2", name = "Alan Turing",       email = "alan@example.com",    sharedMemories = 1, isOnline = false, avatarUrl = "", bio = ""),
+    Friend(id = "u3", name = "Grace Hopper",      email = "grace@example.com",   sharedMemories = 2, isOnline = true,  avatarUrl = "", bio = "Cobol & compilers"),
+    Friend(id = "u4", name = "Linus Torvalds",    email = "linus@example.com",   sharedMemories = 0, isOnline = false, avatarUrl = "", bio = ""),
+    Friend(id = "u5", name = "Margaret Hamilton", email = "margaret@example.com",sharedMemories = 3, isOnline = false, avatarUrl = "", bio = "")
+)
+
+private val previewGroups = listOf(
+    GroupSummary(id = "g1", name = "Summer Trip",  memberCount = 5, memberAvatarUrls = emptyList(), memberNames = listOf("Ada", "Grace", "Alan")),
+    GroupSummary(id = "g2", name = "Weekend Hike", memberCount = 3, memberAvatarUrls = emptyList(), memberNames = listOf("Linus", "Margaret"))
+)
+
+private val previewRequests = listOf(
+    FriendRequest(
+        id            = "r1",
+        fromUserId    = "u9",
+        fromUserName  = "Grace Hopper",
+        fromUserEmail = "grace@example.com",
+        mutualFriends = 2,
+        status        = FriendRequest.Status.PENDING,
+        fromUserBio   = ""
+    )
+)
+
+/** Default Friends tab — friends + groups + one pending request. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends · default")
 @Composable
 fun FriendsScreenPreview() {
     MemoryCircleTheme {
-        FriendsScreen(
+        FriendsContent(
             currentRoute        = "friends",
+            friends             = previewFriends,
+            groups              = previewGroups,
+            allRequests         = previewRequests,
+            snackbarHostState   = remember { SnackbarHostState() },
             onNavigate          = {},
             onOpenSearch        = {},
             onOpenAllRequests   = {},
             onOpenAddFriend     = {},
             onOpenMemberProfile = {},
-            onOpenGroupDetail   = {}
+            onOpenGroupDetail   = {},
+            onAcceptRequest     = {},
+            onRejectRequest     = {},
+            onDeleteFriend      = {}
+        )
+    }
+}
+
+/** Empty state — no friends, no groups, no requests. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends · empty")
+@Composable
+fun FriendsScreenEmptyPreview() {
+    MemoryCircleTheme {
+        FriendsContent(
+            currentRoute        = "friends",
+            friends             = emptyList(),
+            groups              = emptyList(),
+            allRequests         = emptyList(),
+            snackbarHostState   = remember { SnackbarHostState() },
+            onNavigate          = {},
+            onOpenSearch        = {},
+            onOpenAllRequests   = {},
+            onOpenAddFriend     = {},
+            onOpenMemberProfile = {},
+            onOpenGroupDetail   = {},
+            onAcceptRequest     = {},
+            onRejectRequest     = {},
+            onDeleteFriend      = {}
+        )
+    }
+}
+
+/** Groups tab active — selectedTab = GROUPS so the groups list shows below
+ *  the sticky switcher. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends · groups tab")
+@Composable
+fun FriendsScreenGroupsTabPreview() {
+    MemoryCircleTheme {
+        FriendsContent(
+            currentRoute        = "friends",
+            friends             = previewFriends,
+            groups              = previewGroups,
+            allRequests         = previewRequests,
+            snackbarHostState   = remember { SnackbarHostState() },
+            onNavigate          = {},
+            onOpenSearch        = {},
+            onOpenAllRequests   = {},
+            onOpenAddFriend     = {},
+            onOpenMemberProfile = {},
+            onOpenGroupDetail   = {},
+            onAcceptRequest     = {},
+            onRejectRequest     = {},
+            onDeleteFriend      = {},
+            initialSelectedTab  = ContactsTab.GROUPS
+        )
+    }
+}
+
+/** Remove-friend confirmation dialog open over Ada Lovelace's row. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Friends · remove dialog")
+@Composable
+fun FriendsScreenRemoveDialogPreview() {
+    MemoryCircleTheme {
+        FriendsContent(
+            currentRoute           = "friends",
+            friends                = previewFriends,
+            groups                 = previewGroups,
+            allRequests            = previewRequests,
+            snackbarHostState      = remember { SnackbarHostState() },
+            onNavigate             = {},
+            onOpenSearch           = {},
+            onOpenAllRequests      = {},
+            onOpenAddFriend        = {},
+            onOpenMemberProfile    = {},
+            onOpenGroupDetail      = {},
+            onAcceptRequest        = {},
+            onRejectRequest        = {},
+            onDeleteFriend         = {},
+            initialPendingDeleteId = "u1"
         )
     }
 }

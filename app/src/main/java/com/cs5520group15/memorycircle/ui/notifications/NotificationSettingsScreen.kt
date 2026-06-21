@@ -19,6 +19,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cs5520group15.memorycircle.data.NotificationSettingsRepository
+import com.cs5520group15.memorycircle.model.NotificationSettings
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.common.RowDivider
 import com.cs5520group15.memorycircle.ui.theme.*
@@ -37,6 +38,28 @@ fun NotificationSettingsScreen(
 ) {
     val settings by NotificationSettingsRepository.settings.collectAsStateWithLifecycle()
 
+    NotificationSettingsContent(
+        settings                = settings,
+        onBack                  = onBack,
+        onToggleFriendRequests  = NotificationSettingsRepository::setNewFriendRequests,
+        onToggleGroupActivity   = NotificationSettingsRepository::setNewGroupActivity,
+        onToggleMemoryPosts     = NotificationSettingsRepository::setNewMemoryPosts
+    )
+}
+
+/**
+ * Stateless body — takes the settings struct + callbacks so it renders in
+ * @Preview without touching the repository. NotificationSettingsScreen above
+ * is the thin wrapper that wires the repository.
+ */
+@Composable
+private fun NotificationSettingsContent(
+    settings:               NotificationSettings,
+    onBack:                 () -> Unit,
+    onToggleFriendRequests: (Boolean) -> Unit,
+    onToggleGroupActivity:  (Boolean) -> Unit,
+    onToggleMemoryPosts:    (Boolean) -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -57,7 +80,7 @@ fun NotificationSettingsScreen(
                 label       = "New friend requests",
                 description = "Push me when someone sends a friend request.",
                 checked     = settings.newFriendRequests,
-                onChange    = NotificationSettingsRepository::setNewFriendRequests
+                onChange    = onToggleFriendRequests
             )
             RowDivider()
 
@@ -65,7 +88,7 @@ fun NotificationSettingsScreen(
                 label       = "New group activity",
                 description = "Push me when I'm added to a group or someone joins one of mine.",
                 checked     = settings.newGroupActivity,
-                onChange    = NotificationSettingsRepository::setNewGroupActivity
+                onChange    = onToggleGroupActivity
             )
             RowDivider()
 
@@ -73,7 +96,7 @@ fun NotificationSettingsScreen(
                 label       = "New memory posts",
                 description = "Push me when a group member adds a new photo to a scrapbook.",
                 checked     = settings.newMemoryPosts,
-                onChange    = NotificationSettingsRepository::setNewMemoryPosts
+                onChange    = onToggleMemoryPosts
             )
             RowDivider()
         }
@@ -85,7 +108,7 @@ fun NotificationSettingsScreen(
  *       descriptive caption beneath the label so the user knows exactly
  *       what's being silenced. Material3 Switch is themed Sage / Cream
  *       to match the brand palette.
- * Who: Called by NotificationSettingsScreen.
+ * Who: Called by NotificationSettingsContent.
  * When: Rendered for each toggle.
  */
 @Composable
@@ -130,23 +153,59 @@ private fun ToggleRow(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+/** Default — all three channels enabled (factory state). */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Notifications · all on")
 @Composable
-fun ToggleRowPreview() {
+fun NotificationSettingsScreenPreview() {
     MemoryCircleTheme {
-        ToggleRow(
-            label       = "Friend requests",
-            description = "Notify me about new friend requests",
-            checked     = true,
-            onChange    = {}
+        NotificationSettingsContent(
+            settings               = NotificationSettings(),
+            onBack                 = {},
+            onToggleFriendRequests = {},
+            onToggleGroupActivity  = {},
+            onToggleMemoryPosts    = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** All channels muted — every switch off. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Notifications · all off")
 @Composable
-fun NotificationSettingsScreenPreview() {
+fun NotificationSettingsScreenAllOffPreview() {
     MemoryCircleTheme {
-        NotificationSettingsScreen(onBack = {})
+        NotificationSettingsContent(
+            settings               = NotificationSettings(
+                newFriendRequests = false,
+                newGroupActivity  = false,
+                newMemoryPosts    = false
+            ),
+            onBack                 = {},
+            onToggleFriendRequests = {},
+            onToggleGroupActivity  = {},
+            onToggleMemoryPosts    = {}
+        )
+    }
+}
+
+/** Mixed — friend requests off, group activity off, memory posts on. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Notifications · mixed")
+@Composable
+fun NotificationSettingsScreenMixedPreview() {
+    MemoryCircleTheme {
+        NotificationSettingsContent(
+            settings               = NotificationSettings(
+                newFriendRequests = false,
+                newGroupActivity  = false,
+                newMemoryPosts    = true
+            ),
+            onBack                 = {},
+            onToggleFriendRequests = {},
+            onToggleGroupActivity  = {},
+            onToggleMemoryPosts    = {}
+        )
     }
 }

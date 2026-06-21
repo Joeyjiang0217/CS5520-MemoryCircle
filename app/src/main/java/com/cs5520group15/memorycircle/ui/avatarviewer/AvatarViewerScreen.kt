@@ -28,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.R
 import com.cs5520group15.memorycircle.data.NetworkUtil
 import com.cs5520group15.memorycircle.data.ProfileRepository
+import com.cs5520group15.memorycircle.model.Profile
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
 import com.cs5520group15.memorycircle.ui.profile.ProfileViewModel
@@ -52,9 +53,8 @@ fun AvatarViewerScreen(
 ) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
 
-    var showActions by remember { mutableStateOf(false) }
-    var uploading   by remember { mutableStateOf(false) }
-    var errorText   by remember { mutableStateOf<String?>(null) }
+    var uploading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
 
     val scope             = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -77,6 +77,44 @@ fun AvatarViewerScreen(
     LaunchedEffect(errorText) {
         errorText?.let { snackbarHostState.showSnackbar(it) }
     }
+
+    AvatarViewerContent(
+        profile           = profile,
+        uploading         = uploading,
+        snackbarHostState = snackbarHostState,
+        onBack            = onBack,
+        onPickFromAlbum   = {
+            // Gate the photo picker on connectivity so the user doesn't
+            // pick + crop only to have the upload silently queue into
+            // Firestore's offline cache. Matches WeChat / QQ — avatar
+            // edits are blocked offline.
+            if (NetworkUtil.isOnline(context)) {
+                pickMedia.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            } else {
+                scope.launch {
+                    snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
+                }
+            }
+        }
+    )
+}
+
+/**
+ * Stateless content — takes a plain Profile + callbacks so it renders in
+ * @Preview without touching Firebase. AvatarViewerScreen above is the thin
+ * wrapper that wires the ViewModel, system PhotoPicker, and connectivity check.
+ */
+@Composable
+private fun AvatarViewerContent(
+    profile:           Profile,
+    uploading:         Boolean,
+    snackbarHostState: SnackbarHostState,
+    onBack:            () -> Unit,
+    onPickFromAlbum:   () -> Unit
+) {
+    var showActions by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Cream,
@@ -119,19 +157,7 @@ fun AvatarViewerScreen(
         AvatarActionMenu(
             onPickFromAlbum = {
                 showActions = false
-                // Gate the photo picker on connectivity so the user doesn't
-                // pick + crop only to have the upload silently queue into
-                // Firestore's offline cache. Matches WeChat / QQ — avatar
-                // edits are blocked offline.
-                if (NetworkUtil.isOnline(context)) {
-                    pickMedia.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                } else {
-                    scope.launch {
-                        snackbarHostState.showSnackbar("No internet connection. Please try again when online.")
-                    }
-                }
+                onPickFromAlbum()
             },
             onCancel = { showActions = false }
         )
@@ -213,6 +239,17 @@ fun ActionRowPreview() {
 @Composable
 fun AvatarViewerScreenPreview() {
     MemoryCircleTheme {
-        AvatarViewerScreen(onBack = {})
+        AvatarViewerContent(
+            profile = Profile(
+                name      = "Emma Wilson",
+                bio       = "",
+                email     = "e***@example.com",
+                avatarUrl = ""
+            ),
+            uploading         = false,
+            snackbarHostState = remember { SnackbarHostState() },
+            onBack            = {},
+            onPickFromAlbum   = {}
+        )
     }
 }

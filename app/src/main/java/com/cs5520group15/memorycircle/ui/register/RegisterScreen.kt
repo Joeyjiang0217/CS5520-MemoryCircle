@@ -38,16 +38,15 @@ import kotlinx.coroutines.flow.collectLatest
  */
 @Composable
 fun RegisterScreen(
-    onRegisterSuccess:  () -> Unit,
-    onNavigateToLogin:  () -> Unit,
-    viewModel: RegisterViewModel = viewModel()
+    onRegisterSuccess: () -> Unit,
+    onNavigateToLogin: () -> Unit,
+    viewModel:         RegisterViewModel = viewModel()
 ) {
     val name      by viewModel.name.collectAsStateWithLifecycle()
     val email     by viewModel.email.collectAsStateWithLifecycle()
     val password  by viewModel.password.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-    var passwordVisible   by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
@@ -58,6 +57,40 @@ fun RegisterScreen(
             }
         }
     }
+
+    RegisterContent(
+        name              = name,
+        email             = email,
+        password          = password,
+        isLoading         = isLoading,
+        snackbarHostState = snackbarHostState,
+        onNameChange      = viewModel::onNameChange,
+        onEmailChange     = viewModel::onEmailChange,
+        onPasswordChange  = viewModel::onPasswordChange,
+        onRegisterClick   = viewModel::onRegisterClick,
+        onNavigateToLogin = onNavigateToLogin
+    )
+}
+
+/**
+ * Stateless body — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. RegisterScreen above is the thin wrapper that
+ * wires the ViewModel and event collection.
+ */
+@Composable
+private fun RegisterContent(
+    name:              String,
+    email:             String,
+    password:          String,
+    isLoading:         Boolean,
+    snackbarHostState: SnackbarHostState,
+    onNameChange:      (String) -> Unit,
+    onEmailChange:     (String) -> Unit,
+    onPasswordChange:  (String) -> Unit,
+    onRegisterClick:   () -> Unit,
+    onNavigateToLogin: () -> Unit
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost   = { SnackbarHost(snackbarHostState) },
@@ -100,7 +133,7 @@ fun RegisterScreen(
             )
             OutlinedTextField(
                 value         = name,
-                onValueChange = viewModel::onNameChange,
+                onValueChange = onNameChange,
                 modifier      = Modifier.fillMaxWidth(),
                 shape         = RoundedCornerShape(28.dp),
                 placeholder   = { Text("Your full name", color = Brown.copy(alpha = 0.6f)) },
@@ -118,7 +151,7 @@ fun RegisterScreen(
             )
             OutlinedTextField(
                 value         = email,
-                onValueChange = viewModel::onEmailChange,
+                onValueChange = onEmailChange,
                 modifier      = Modifier.fillMaxWidth(),
                 shape         = RoundedCornerShape(28.dp),
                 placeholder   = { Text("sarah@example.com", color = Brown.copy(alpha = 0.6f)) },
@@ -137,7 +170,7 @@ fun RegisterScreen(
             )
             OutlinedTextField(
                 value         = password,
-                onValueChange = viewModel::onPasswordChange,
+                onValueChange = onPasswordChange,
                 modifier      = Modifier.fillMaxWidth(),
                 shape         = RoundedCornerShape(28.dp),
                 placeholder   = { Text("••••••••", color = Brown.copy(alpha = 0.6f)) },
@@ -164,7 +197,7 @@ fun RegisterScreen(
 
             PrimaryButton(
                 label   = "Create Account",
-                onClick = viewModel::onRegisterClick,
+                onClick = onRegisterClick,
                 loading = isLoading
             )
 
@@ -191,10 +224,66 @@ fun RegisterScreen(
     }
 }
 
-@Preview(showBackground = true)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+/** Default empty form. */
+@Preview(showBackground = true, name = "Register · empty")
 @Composable
 fun RegisterScreenPreview() {
     MemoryCircleTheme {
-        RegisterScreen(onRegisterSuccess = {}, onNavigateToLogin = {})
+        RegisterContent(
+            name              = "",
+            email             = "",
+            password          = "",
+            isLoading         = false,
+            snackbarHostState = remember { SnackbarHostState() },
+            onNameChange      = {},
+            onEmailChange     = {},
+            onPasswordChange  = {},
+            onRegisterClick   = {},
+            onNavigateToLogin = {}
+        )
+    }
+}
+
+/** Form filled in, ready to submit. */
+@Preview(showBackground = true, name = "Register · filled")
+@Composable
+fun RegisterScreenFilledPreview() {
+    MemoryCircleTheme {
+        RegisterContent(
+            name              = "Ada Lovelace",
+            email             = "ada@example.com",
+            password          = "secret123",
+            isLoading         = false,
+            snackbarHostState = remember { SnackbarHostState() },
+            onNameChange      = {},
+            onEmailChange     = {},
+            onPasswordChange  = {},
+            onRegisterClick   = {},
+            onNavigateToLogin = {}
+        )
+    }
+}
+
+/** Loading spinner — registration request in flight. */
+@Preview(showBackground = true, name = "Register · loading")
+@Composable
+fun RegisterScreenLoadingPreview() {
+    MemoryCircleTheme {
+        RegisterContent(
+            name              = "Ada Lovelace",
+            email             = "ada@example.com",
+            password          = "secret123",
+            isLoading         = true,
+            snackbarHostState = remember { SnackbarHostState() },
+            onNameChange      = {},
+            onEmailChange     = {},
+            onPasswordChange  = {},
+            onRegisterClick   = {},
+            onNavigateToLogin = {}
+        )
     }
 }

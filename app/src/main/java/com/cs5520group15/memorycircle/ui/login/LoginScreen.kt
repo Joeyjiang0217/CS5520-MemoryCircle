@@ -42,29 +42,61 @@ import kotlinx.coroutines.flow.collectLatest
  */
 @Composable
 fun LoginScreen(
-    onLoginSuccess:      () -> Unit,
+    onLoginSuccess:       () -> Unit,
     onNavigateToRegister: () -> Unit,
-    viewModel: LoginViewModel = viewModel()
+    viewModel:            LoginViewModel = viewModel()
 ) {
     val email     by viewModel.email.collectAsStateWithLifecycle()
     val password  by viewModel.password.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-    var passwordVisible by remember { mutableStateOf(false) }
-    var showForgotDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
         viewModel.events.collectLatest { event ->
             when (event) {
-                is LoginViewModel.LoginEvent.ShowSnackbar  -> snackbarHostState.showSnackbar(event.message)
+                is LoginViewModel.LoginEvent.ShowSnackbar   -> snackbarHostState.showSnackbar(event.message)
                 is LoginViewModel.LoginEvent.NavigateToHome -> onLoginSuccess()
             }
         }
     }
 
+    LoginContent(
+        email                = email,
+        password             = password,
+        isLoading            = isLoading,
+        snackbarHostState    = snackbarHostState,
+        onEmailChange        = viewModel::onEmailChange,
+        onPasswordChange     = viewModel::onPasswordChange,
+        onLoginClick         = viewModel::onLoginClick,
+        onForgotPassword     = viewModel::onForgotPassword,
+        onNavigateToRegister = onNavigateToRegister
+    )
+}
+
+/**
+ * Stateless body — takes plain values + callbacks so it renders in @Preview
+ * without touching Firebase. LoginScreen above is the thin wrapper that wires
+ * the ViewModel and event collection.
+ */
+@Composable
+private fun LoginContent(
+    email:                String,
+    password:             String,
+    isLoading:            Boolean,
+    snackbarHostState:    SnackbarHostState,
+    onEmailChange:        (String) -> Unit,
+    onPasswordChange:     (String) -> Unit,
+    onLoginClick:         () -> Unit,
+    onForgotPassword:     (String) -> Unit,
+    onNavigateToRegister: () -> Unit,
+    initialShowForgotDialog: Boolean = false
+) {
+    var passwordVisible  by remember { mutableStateOf(false) }
+    var showForgotDialog by remember { mutableStateOf(initialShowForgotDialog) }
+
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         containerColor = Cream
     ) { padding ->
         Column(
@@ -131,7 +163,7 @@ fun LoginScreen(
             )
             OutlinedTextField(
                 value         = email,
-                onValueChange = viewModel::onEmailChange,
+                onValueChange = onEmailChange,
                 modifier      = Modifier.fillMaxWidth(),
                 shape         = RoundedCornerShape(28.dp),
                 placeholder   = { Text("sarah@example.com", color = Brown.copy(alpha = 0.6f)) },
@@ -159,7 +191,7 @@ fun LoginScreen(
             )
             OutlinedTextField(
                 value         = password,
-                onValueChange = viewModel::onPasswordChange,
+                onValueChange = onPasswordChange,
                 modifier      = Modifier.fillMaxWidth(),
                 shape         = RoundedCornerShape(28.dp),
                 placeholder   = { Text("••••••••", color = Brown.copy(alpha = 0.6f)) },
@@ -199,7 +231,7 @@ fun LoginScreen(
 
             PrimaryButton(
                 label   = "Sign In",
-                onClick = viewModel::onLoginClick,
+                onClick = onLoginClick,
                 loading = isLoading
             )
 
@@ -229,7 +261,7 @@ fun LoginScreen(
                 initialEmail = email,
                 onDismiss    = { showForgotDialog = false },
                 onSend       = { resetEmail ->
-                    viewModel.onForgotPassword(resetEmail)
+                    onForgotPassword(resetEmail)
                     showForgotDialog = false
                 }
             )
@@ -239,7 +271,7 @@ fun LoginScreen(
 
 /**
  * What: Dialog where the user enters an email to receive a password reset link.
- * Who: Shown by LoginScreen when the user taps "Forgot password?".
+ * Who: Shown by LoginContent when the user taps "Forgot password?".
  * When: While showForgotDialog is true.
  */
 @Composable
@@ -303,22 +335,83 @@ private fun ForgotPasswordDialog(
     )
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+/** Default empty form. */
+@Preview(showBackground = true, name = "Login · empty")
 @Composable
-fun ForgotPasswordDialogPreview() {
+fun LoginScreenPreview() {
     MemoryCircleTheme {
-        ForgotPasswordDialog(
-            initialEmail = "ada@example.com",
-            onDismiss    = {},
-            onSend       = {}
+        LoginContent(
+            email                = "",
+            password             = "",
+            isLoading            = false,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onEmailChange        = {},
+            onPasswordChange     = {},
+            onLoginClick         = {},
+            onForgotPassword     = {},
+            onNavigateToRegister = {}
         )
     }
 }
 
-@Preview(showBackground = true)
+/** Form filled in, ready to submit. */
+@Preview(showBackground = true, name = "Login · filled")
 @Composable
-fun LoginScreenPreview() {
+fun LoginScreenFilledPreview() {
     MemoryCircleTheme {
-        LoginScreen(onLoginSuccess = {}, onNavigateToRegister = {})
+        LoginContent(
+            email                = "ada@example.com",
+            password             = "secret123",
+            isLoading            = false,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onEmailChange        = {},
+            onPasswordChange     = {},
+            onLoginClick         = {},
+            onForgotPassword     = {},
+            onNavigateToRegister = {}
+        )
+    }
+}
+
+/** Loading spinner on the Sign In button — login request in flight. */
+@Preview(showBackground = true, name = "Login · loading")
+@Composable
+fun LoginScreenLoadingPreview() {
+    MemoryCircleTheme {
+        LoginContent(
+            email                = "ada@example.com",
+            password             = "secret123",
+            isLoading            = true,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onEmailChange        = {},
+            onPasswordChange     = {},
+            onLoginClick         = {},
+            onForgotPassword     = {},
+            onNavigateToRegister = {}
+        )
+    }
+}
+
+/** Forgot-password dialog open. */
+@Preview(showBackground = true, name = "Login · forgot dialog")
+@Composable
+fun LoginScreenForgotDialogPreview() {
+    MemoryCircleTheme {
+        LoginContent(
+            email                   = "ada@example.com",
+            password                = "",
+            isLoading               = false,
+            snackbarHostState       = remember { SnackbarHostState() },
+            onEmailChange           = {},
+            onPasswordChange        = {},
+            onLoginClick            = {},
+            onForgotPassword        = {},
+            onNavigateToRegister    = {},
+            initialShowForgotDialog = true
+        )
     }
 }

@@ -105,33 +105,10 @@ fun CreateGroupScreen(
     val query       by viewModel.query.collectAsStateWithLifecycle()
     val groupName   by viewModel.groupName.collectAsStateWithLifecycle()
 
-    val selectedContacts = remember(contacts, selectedIds) {
-        contacts.filter { it.id in selectedIds }
-    }
-
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
 
-    val focusRequester = remember { FocusRequester() }
-    val keyboard       = LocalSoftwareKeyboardController.current
-
-    // Auto-focus the TextField the moment the user activates search.
-    LaunchedEffect(isSearchActive) {
-        if (isSearchActive) focusRequester.requestFocus()
-    }
-
-    // System back exits search mode first instead of unwinding the screen so the
-    // user doesn't lose their selection by accident.
-    BackHandler(enabled = isSearchActive) {
-        keyboard?.hide()
-        viewModel.clearQuery()
-        isSearchActive = false
-    }
-
-    val title    = if (isInviteMode) "Invite New Members" else "New Group"
-    val ctaLabel = if (isInviteMode) "Invite Now"         else "Create Now"
-
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    val context    = LocalContext.current
     val snackScope = rememberCoroutineScope()
 
     // One-shot events from the ViewModel: Created(groupId) → caller's onCreated;
@@ -163,6 +140,69 @@ fun CreateGroupScreen(
         }
     }
 
+    CreateGroupContent(
+        isInviteMode         = isInviteMode,
+        contacts             = contacts,
+        selectedIds          = selectedIds,
+        query                = query,
+        groupName            = groupName,
+        isSearchActive       = isSearchActive,
+        snackbarHostState    = snackbarHostState,
+        onBack               = onBack,
+        onGroupNameChange    = viewModel::onGroupNameChange,
+        onQueryChange        = viewModel::onQueryChange,
+        onClearQuery         = viewModel::clearQuery,
+        onToggle             = viewModel::toggle,
+        onSearchActiveChange = { isSearchActive = it },
+        onConfirm            = onConfirm
+    )
+}
+
+/**
+ * Stateless body — owns no Firebase dependency, so it renders in @Preview.
+ * CreateGroupScreen above is the thin wrapper that wires the ViewModel,
+ * connectivity checks, and one-shot events.
+ */
+@Composable
+private fun CreateGroupContent(
+    isInviteMode:         Boolean,
+    contacts:             List<Friend>,
+    selectedIds:          Set<String>,
+    query:                String,
+    groupName:            String,
+    isSearchActive:       Boolean,
+    snackbarHostState:    SnackbarHostState,
+    onBack:               () -> Unit,
+    onGroupNameChange:    (String) -> Unit,
+    onQueryChange:        (String) -> Unit,
+    onClearQuery:         () -> Unit,
+    onToggle:             (String) -> Unit,
+    onSearchActiveChange: (Boolean) -> Unit,
+    onConfirm:            () -> Unit
+) {
+    val selectedContacts = remember(contacts, selectedIds) {
+        contacts.filter { it.id in selectedIds }
+    }
+
+    val focusRequester = remember { FocusRequester() }
+    val keyboard       = LocalSoftwareKeyboardController.current
+
+    // Auto-focus the TextField the moment the user activates search.
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) focusRequester.requestFocus()
+    }
+
+    // System back exits search mode first instead of unwinding the screen so the
+    // user doesn't lose their selection by accident.
+    BackHandler(enabled = isSearchActive) {
+        keyboard?.hide()
+        onClearQuery()
+        onSearchActiveChange(false)
+    }
+
+    val title    = if (isInviteMode) "Invite New Members" else "New Group"
+    val ctaLabel = if (isInviteMode) "Invite Now"         else "Create Now"
+
     Scaffold(
         containerColor = Cream,
         snackbarHost   = { SnackbarHost(snackbarHostState) },
@@ -192,7 +232,7 @@ fun CreateGroupScreen(
             if (!isInviteMode) {
                 OutlinedTextField(
                     value           = groupName,
-                    onValueChange   = viewModel::onGroupNameChange,
+                    onValueChange   = onGroupNameChange,
                     label           = { Text("Group name") },
                     singleLine      = true,
                     colors          = brandFieldColors(),
@@ -205,16 +245,16 @@ fun CreateGroupScreen(
             if (isSearchActive) {
                 ActiveSearchRow(
                     query          = query,
-                    onQueryChange  = viewModel::onQueryChange,
+                    onQueryChange  = onQueryChange,
                     selected       = selectedContacts,
                     focusRequester = focusRequester,
-                    onClear        = viewModel::clearQuery,
+                    onClear        = onClearQuery,
                     modifier       = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             } else {
                 TapSearchRow(
                     selected = selectedContacts,
-                    onClick  = { isSearchActive = true },
+                    onClick  = { onSearchActiveChange(true) },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                 )
             }
@@ -227,18 +267,22 @@ fun CreateGroupScreen(
             // visually collapse the moment focus enters.
             val showResults = isSearchActive && query.isNotBlank()
             if (showResults) {
-                val results = viewModel.match(query)
+                val needle = query.trim()
+                val results = contacts.filter { c ->
+                    c.name.contains(needle, ignoreCase = true) ||
+                    c.email.contains(needle, ignoreCase = true)
+                }
                 if (results.isEmpty()) {
-                    EmptyHint(text = "No contacts matched \"${query.trim()}\".")
+                    EmptyHint(text = "No contacts matched \"$needle\".")
                 } else {
                     SearchResults(
                         results     = results,
                         selectedIds = selectedIds,
                         onPick      = { id ->
-                            viewModel.toggle(id)
-                            viewModel.clearQuery()
+                            onToggle(id)
+                            onClearQuery()
                             keyboard?.hide()
-                            isSearchActive = false
+                            onSearchActiveChange(false)
                         }
                     )
                 }
@@ -246,7 +290,7 @@ fun CreateGroupScreen(
                 ContactsList(
                     contacts    = contacts,
                     selectedIds = selectedIds,
-                    onToggle    = viewModel::toggle,
+                    onToggle    = onToggle,
                     modifier    = Modifier.fillMaxSize()
                 )
             }
@@ -259,7 +303,7 @@ fun CreateGroupScreen(
  *       up at the left so the user can see their selection even while the
  *       contact list is scrolled; the previews are capped at 4 with an
  *       inline "+N" overflow chip so the row can't outgrow one line.
- * Who: Called by CreateGroupScreen when isSearchActive is false.
+ * Who: Called by CreateGroupContent when isSearchActive is false.
  * When: Visible in the default state.
  */
 @Composable
@@ -300,20 +344,6 @@ private fun TapSearchRow(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun TapSearchRowPreview() {
-    MemoryCircleTheme {
-        TapSearchRow(
-            selected = listOf(
-                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
-                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
-            ),
-            onClick  = {}
-        )
-    }
-}
-
 /**
  * What: The active search bar — same chrome as TapSearchRow but with an
  *       editable BasicTextField in place of the static "Search" placeholder
@@ -321,7 +351,7 @@ fun TapSearchRowPreview() {
  *       BasicTextField is used rather than OutlinedTextField so the field
  *       inherits the parent Row's height + background without the chunky
  *       Material outline visible inside the already-bordered container.
- * Who: Called by CreateGroupScreen when isSearchActive is true.
+ * Who: Called by CreateGroupContent when isSearchActive is true.
  * When: Visible while the user has tapped into search.
  */
 @Composable
@@ -380,22 +410,6 @@ private fun ActiveSearchRow(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ActiveSearchRowPreview() {
-    MemoryCircleTheme {
-        ActiveSearchRow(
-            query          = "ada",
-            onQueryChange  = {},
-            selected       = listOf(
-                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking")
-            ),
-            focusRequester = remember { FocusRequester() },
-            onClear        = {}
-        )
-    }
-}
-
 /**
  * What: Renders the avatar-preview run shared by both search bar variants.
  *       Extracted so the two callers stay in visual lock-step (avatar size,
@@ -432,20 +446,6 @@ private fun SelectedAvatarPreviews(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun SelectedAvatarPreviewsPreview() {
-    MemoryCircleTheme {
-        SelectedAvatarPreviews(
-            previews = listOf(
-                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
-                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
-            ),
-            overflow = 3
-        )
-    }
-}
-
 /**
  * What: Small round clear-query button on the right of the active search bar.
  *       Same visual family as DeclineCircleButton (neutral grey background +
@@ -473,19 +473,11 @@ private fun ClearQueryButton(onClick: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ClearQueryButtonPreview() {
-    MemoryCircleTheme {
-        ClearQueryButton(onClick = {})
-    }
-}
-
 /**
  * What: Scrollable contact list — the default body of the screen. Every row
  *       is tappable in its entirety so the user can flip the selection
  *       without aiming at the checkbox.
- * Who: Called by CreateGroupScreen.
+ * Who: Called by CreateGroupContent.
  * When: Rendered in the default state, and also while search is active with
  *       an empty query.
  */
@@ -510,21 +502,6 @@ private fun ContactsList(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ContactsListPreview() {
-    MemoryCircleTheme {
-        ContactsList(
-            contacts    = listOf(
-                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
-                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
-            ),
-            selectedIds = setOf("u1"),
-            onToggle    = {}
-        )
-    }
-}
-
 /**
  * What: Live search results body. Replaces ContactsList while the user has
  *       typed something. Each row mirrors the contact-list visual but uses a
@@ -532,7 +509,7 @@ fun ContactsListPreview() {
  *       contact (and the parent closes search). Already-selected contacts
  *       render greyed out and non-tappable so the user can see "yes I
  *       already grabbed them" without the option to try again.
- * Who: Called by CreateGroupScreen while isSearchActive and query non-blank.
+ * Who: Called by CreateGroupContent while isSearchActive and query non-blank.
  * When: Per recomposition with a non-empty match list.
  */
 @Composable
@@ -553,21 +530,6 @@ private fun SearchResults(
                 onClick  = { if (!alreadyPicked) onPick(friend.id) }
             )
         }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun SearchResultsPreview() {
-    MemoryCircleTheme {
-        SearchResults(
-            results     = listOf(
-                Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
-                Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2)
-            ),
-            selectedIds = setOf("u1"),
-            onPick      = {}
-        )
     }
 }
 
@@ -602,18 +564,6 @@ private fun ContactRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ContactRowPreview() {
-    MemoryCircleTheme {
-        ContactRow(
-            contact  = Friend(id = "u1", name = "Ada Lovelace", email = "ada@example.com", sharedMemories = 4, isOnline = true, avatarUrl = "", bio = "Loves hiking"),
-            selected = true,
-            onClick  = {}
         )
     }
 }
@@ -663,18 +613,6 @@ private fun ResultRow(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun ResultRowPreview() {
-    MemoryCircleTheme {
-        ResultRow(
-            friend   = Friend(id = "u2", name = "Grace Hopper", email = "grace@example.com", sharedMemories = 2),
-            disabled = true,
-            onClick  = {}
-        )
-    }
-}
-
 /**
  * What: Branded selection circle drawn as a small Box rather than the default
  *       Material Checkbox so the visual stays inside the brand palette
@@ -714,21 +652,13 @@ private fun SelectionCheckbox(selected: Boolean, disabled: Boolean) {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun SelectionCheckboxPreview() {
-    MemoryCircleTheme {
-        SelectionCheckbox(selected = true, disabled = false)
-    }
-}
-
 /**
  * What: Sticky CTA at the foot of the screen. With nothing selected the button
  *       reads as a disabled-looking outlined affordance — the user can see
  *       what's coming but the row is non-interactive. The moment any contact
  *       is picked it switches to a filled PrimaryButton labelled with the
  *       provided ctaLabel + "(N)" so the count updates live.
- * Who: Called by CreateGroupScreen's Scaffold.bottomBar.
+ * Who: Called by CreateGroupContent's Scaffold.bottomBar.
  * When: Rendered whenever isSearchActive is false.
  */
 @Composable
@@ -759,37 +689,115 @@ private fun BottomCta(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun BottomCtaPreview() {
-    MemoryCircleTheme {
-        BottomCta(
-            selectedCount = 2,
-            ctaLabel      = "Create Now",
-            onConfirm     = {}
-        )
-    }
-}
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// Build out of a fixed sample contact pool so the layout sits identical
+// across previews and only the highlighted state differs.
+// ---------------------------------------------------------------------------
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+private val previewContacts = listOf(
+    Friend(id = "u1", name = "Ada Lovelace",    email = "ada@example.com",    sharedMemories = 4, isOnline = true,  avatarUrl = "", bio = ""),
+    Friend(id = "u2", name = "Grace Hopper",    email = "grace@example.com",  sharedMemories = 2, isOnline = false, avatarUrl = "", bio = ""),
+    Friend(id = "u3", name = "Alan Turing",     email = "alan@example.com",   sharedMemories = 1, isOnline = false, avatarUrl = "", bio = ""),
+    Friend(id = "u4", name = "Linus Torvalds",  email = "linus@example.com",  sharedMemories = 0, isOnline = true,  avatarUrl = "", bio = ""),
+    Friend(id = "u5", name = "Margaret Hamilton", email = "margaret@example.com", sharedMemories = 3, isOnline = false, avatarUrl = "", bio = "")
+)
+
+/** Default new-group state — empty group name, nothing selected, contact list visible. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "New group · empty")
 @Composable
 fun CreateGroupScreenPreview() {
     MemoryCircleTheme {
-        CreateGroupScreen(
-            onBack    = {},
-            onCreated = {}
+        CreateGroupContent(
+            isInviteMode         = false,
+            contacts             = previewContacts,
+            selectedIds          = emptySet(),
+            query                = "",
+            groupName            = "",
+            isSearchActive       = false,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onBack               = {},
+            onGroupNameChange    = {},
+            onQueryChange        = {},
+            onClearQuery         = {},
+            onToggle             = {},
+            onSearchActiveChange = {},
+            onConfirm            = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** New-group with a name typed and a couple of contacts picked — shows the
+ *  filled "Create Now (N)" CTA and the selected-avatar previews on the search bar. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "New group · with selection")
+@Composable
+fun CreateGroupScreenWithSelectionPreview() {
+    MemoryCircleTheme {
+        CreateGroupContent(
+            isInviteMode         = false,
+            contacts             = previewContacts,
+            selectedIds          = setOf("u1", "u3"),
+            query                = "",
+            groupName            = "Summer Trip",
+            isSearchActive       = false,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onBack               = {},
+            onGroupNameChange    = {},
+            onQueryChange        = {},
+            onClearQuery         = {},
+            onToggle             = {},
+            onSearchActiveChange = {},
+            onConfirm            = {}
+        )
+    }
+}
+
+/** Search-active state with a query typed — exercises the active search row,
+ *  the search results list, and the "Already added" greyed row. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "New group · searching")
+@Composable
+fun CreateGroupScreenSearchActivePreview() {
+    MemoryCircleTheme {
+        CreateGroupContent(
+            isInviteMode         = false,
+            contacts             = previewContacts,
+            selectedIds          = setOf("u1"),
+            query                = "a",
+            groupName            = "Summer Trip",
+            isSearchActive       = true,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onBack               = {},
+            onGroupNameChange    = {},
+            onQueryChange        = {},
+            onClearQuery         = {},
+            onToggle             = {},
+            onSearchActiveChange = {},
+            onConfirm            = {}
+        )
+    }
+}
+
+/** Invite mode — no group-name field, title flips to "Invite New Members"
+ *  and the CTA label switches to "Invite Now (N)". */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Invite mode · with selection")
 @Composable
 fun CreateGroupScreenInvitePreview() {
     MemoryCircleTheme {
-        CreateGroupScreen(
-            onBack       = {},
-            isInviteMode = true,
-            onInvited    = {}
+        CreateGroupContent(
+            isInviteMode         = true,
+            contacts             = previewContacts,
+            selectedIds          = setOf("u2"),
+            query                = "",
+            groupName            = "",
+            isSearchActive       = false,
+            snackbarHostState    = remember { SnackbarHostState() },
+            onBack               = {},
+            onGroupNameChange    = {},
+            onQueryChange        = {},
+            onClearQuery         = {},
+            onToggle             = {},
+            onSearchActiveChange = {},
+            onConfirm            = {}
         )
     }
 }

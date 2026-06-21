@@ -75,6 +75,29 @@ fun ScrapbookHistoryScreen(
         loading = false
     }
 
+    ScrapbookHistoryContent(
+        month   = month,
+        year    = year,
+        entries = entries,
+        loading = loading,
+        onBack  = onBack
+    )
+}
+
+/**
+ * Stateless body — takes the entry list + loading flag so it renders in
+ * @Preview without touching Firebase. ScrapbookHistoryScreen above is the thin
+ * wrapper that resolves the month → scrapbookId map and fetches via the
+ * repository.
+ */
+@Composable
+private fun ScrapbookHistoryContent(
+    month:   String,
+    year:    String,
+    entries: List<ScrapbookEntry>,
+    loading: Boolean,
+    onBack:  () -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -282,88 +305,96 @@ private fun HistoryCommentRow(comment: Comment) {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewPhoto = Photo(
+    photoId           = "p1",
+    url               = "",
+    storagePath       = "",
+    description       = "Sunset at the lake",
+    uploaderId        = "u1",
+    uploaderName      = "Ada",
+    uploaderAvatarUrl = ""
+)
+
+private val previewComment = Comment(
+    id              = "c1",
+    authorId        = "u1",
+    authorName      = "Ada Lovelace",
+    authorAvatarUrl = "",
+    text            = "So much fun!"
+)
+
+private val previewEntries = listOf(
+    ScrapbookEntry(
+        id              = "e1",
+        authorId        = "u1",
+        authorName      = "Ada Lovelace",
+        authorAvatarUrl = "",
+        date            = "June 1",
+        title           = "Lakeside Picnic",
+        tags            = listOf("food", "park"),
+        photos          = listOf(previewPhoto),
+        comments        = listOf(previewComment),
+        commentCount    = 1
+    ),
+    ScrapbookEntry(
+        id              = "e2",
+        authorId        = "u2",
+        authorName      = "Grace Hopper",
+        authorAvatarUrl = "",
+        date            = "June 14",
+        title           = "Sunrise Hike",
+        tags            = listOf("hike"),
+        photos          = listOf(previewPhoto.copy(photoId = "p2", description = "Top of the hill")),
+        comments        = emptyList(),
+        commentCount    = 0
+    )
+)
+
+/** Default — two timeline entries, the first with a comment. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Scrapbook history · default")
 @Composable
 fun ScrapbookHistoryScreenPreview() {
     MemoryCircleTheme {
-        ScrapbookHistoryScreen(
-            groupId = "1",
-            month   = "March",
+        ScrapbookHistoryContent(
+            month   = "June",
             year    = "2025",
+            entries = previewEntries,
+            loading = false,
             onBack  = {}
         )
     }
 }
 
-private val historyPreviewPhoto = Photo(
-    photoId = "p1",
-    url = "",
-    storagePath = "",
-    description = "Sunset at the lake",
-    uploaderId = "u1",
-    uploaderName = "Ada",
-    uploaderAvatarUrl = ""
-)
-
-private val historyPreviewComment = Comment(
-    id = "c1",
-    authorId = "u1",
-    authorName = "Ada Lovelace",
-    authorAvatarUrl = "",
-    text = "So much fun!"
-)
-
-private val historyPreviewEntry = ScrapbookEntry(
-    id = "e1",
-    authorId = "u1",
-    authorName = "Ada Lovelace",
-    authorAvatarUrl = "",
-    date = "June 1",
-    title = "Lakeside Picnic",
-    tags = listOf("food", "park"),
-    photos = listOf(historyPreviewPhoto),
-    comments = listOf(historyPreviewComment),
-    commentCount = 1
-)
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Empty — month resolved but no entries exist. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Scrapbook history · empty")
 @Composable
-fun HistoryTimelineEntryPreview() {
+fun ScrapbookHistoryScreenEmptyPreview() {
     MemoryCircleTheme {
-        HistoryTimelineEntry(
-            entry = historyPreviewEntry
+        ScrapbookHistoryContent(
+            month   = "March",
+            year    = "2025",
+            entries = emptyList(),
+            loading = false,
+            onBack  = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Loading — entries being fetched. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Scrapbook history · loading")
 @Composable
-fun HistoryMemoryCardPreview() {
+fun ScrapbookHistoryScreenLoadingPreview() {
     MemoryCircleTheme {
-        HistoryMemoryCard(
-            entry = historyPreviewEntry
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun HistoryPhotoBlockPreview() {
-    MemoryCircleTheme {
-        HistoryPhotoBlock(
-            photo = historyPreviewPhoto,
-            fallbackName = "Ada Lovelace",
-            fallbackAvatarUrl = ""
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
-@Composable
-fun HistoryCommentRowPreview() {
-    MemoryCircleTheme {
-        HistoryCommentRow(
-            comment = historyPreviewComment
+        ScrapbookHistoryContent(
+            month   = "June",
+            year    = "2025",
+            entries = emptyList(),
+            loading = true,
+            onBack  = {}
         )
     }
 }

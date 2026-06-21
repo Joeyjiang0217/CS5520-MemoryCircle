@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cs5520group15.memorycircle.data.NetworkUtil
+import com.cs5520group15.memorycircle.model.Profile
 import com.cs5520group15.memorycircle.ui.common.AvatarCircle
 import com.cs5520group15.memorycircle.ui.common.Chevron
 import com.cs5520group15.memorycircle.ui.common.MemoryCircleTopBar
@@ -50,8 +51,6 @@ fun EditProfileScreen(
 ) {
     val profile by viewModel.profile.collectAsStateWithLifecycle()
 
-    var editingField by remember { mutableStateOf<EditField?>(null) }
-
     val context           = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val snackScope        = rememberCoroutineScope()
@@ -71,6 +70,35 @@ fun EditProfileScreen(
             }
         }
     }
+
+    EditProfileContent(
+        profile            = profile,
+        snackbarHostState  = snackbarHostState,
+        onBack             = onBack,
+        onOpenAvatarViewer = onOpenAvatarViewer,
+        onSaveName         = { runOnline { viewModel.updateName(it)  } },
+        onSaveBio          = { runOnline { viewModel.updateBio(it)   } },
+        onSaveEmail        = { runOnline { viewModel.updateEmail(it) } }
+    )
+}
+
+/**
+ * Stateless body — takes a plain Profile + callbacks so it renders in @Preview
+ * without touching Firebase. EditProfileScreen above is the thin wrapper that
+ * wires the ViewModel + the offline-write gate.
+ */
+@Composable
+private fun EditProfileContent(
+    profile:            Profile,
+    snackbarHostState:  SnackbarHostState,
+    onBack:             () -> Unit,
+    onOpenAvatarViewer: () -> Unit,
+    onSaveName:         (String) -> Unit,
+    onSaveBio:          (String) -> Unit,
+    onSaveEmail:        (String) -> Unit,
+    initialEditingField: EditField? = null
+) {
+    var editingField by remember { mutableStateOf(initialEditingField) }
 
     Scaffold(
         containerColor = Cream,
@@ -137,12 +165,10 @@ fun EditProfileScreen(
             },
             onSave = { value ->
                 editingField = null
-                runOnline {
-                    when (active) {
-                        EditField.NAME  -> viewModel.updateName(value)
-                        EditField.BIO   -> viewModel.updateBio(value)
-                        EditField.EMAIL -> viewModel.updateEmail(value)
-                    }
+                when (active) {
+                    EditField.NAME  -> onSaveName(value)
+                    EditField.BIO   -> onSaveBio(value)
+                    EditField.EMAIL -> onSaveEmail(value)
                 }
             },
             onDismiss = { editingField = null }
@@ -250,38 +276,83 @@ private fun EditFieldDialog(
     )
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewProfile = Profile(
+    name      = "Ada Lovelace",
+    bio       = "First computer programmer. Loves analytical engines & math.",
+    email     = "ada@example.com",
+    avatarUrl = ""
+)
+
+/** Default state — profile loaded, no dialog open. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Edit profile · default")
 @Composable
 fun EditProfileScreenPreview() {
     MemoryCircleTheme {
-        EditProfileScreen(
+        EditProfileContent(
+            profile            = previewProfile,
+            snackbarHostState  = remember { SnackbarHostState() },
             onBack             = {},
-            onOpenAvatarViewer = {}
+            onOpenAvatarViewer = {},
+            onSaveName         = {},
+            onSaveBio          = {},
+            onSaveEmail        = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Empty-bio state — "Not set" placeholder rendered on the Bio row. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Edit profile · empty bio")
 @Composable
-fun AvatarRowPreview() {
+fun EditProfileScreenEmptyBioPreview() {
     MemoryCircleTheme {
-        AvatarRow(
-            name     = "Ada Lovelace",
-            photoUrl = "",
-            onClick  = {}
+        EditProfileContent(
+            profile            = previewProfile.copy(bio = ""),
+            snackbarHostState  = remember { SnackbarHostState() },
+            onBack             = {},
+            onOpenAvatarViewer = {},
+            onSaveName         = {},
+            onSaveBio          = {},
+            onSaveEmail        = {}
         )
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+/** Edit dialog open over the Name row. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Edit profile · editing name")
 @Composable
-fun EditFieldDialogPreview() {
+fun EditProfileScreenEditingNamePreview() {
     MemoryCircleTheme {
-        EditFieldDialog(
-            field        = EditField.NAME,
-            initialValue = "Ada Lovelace",
-            onSave       = {},
-            onDismiss    = {}
+        EditProfileContent(
+            profile             = previewProfile,
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onOpenAvatarViewer  = {},
+            onSaveName          = {},
+            onSaveBio           = {},
+            onSaveEmail         = {},
+            initialEditingField = EditField.NAME
+        )
+    }
+}
+
+/** Edit dialog open over the Bio row — multi-line variant. */
+@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE, name = "Edit profile · editing bio")
+@Composable
+fun EditProfileScreenEditingBioPreview() {
+    MemoryCircleTheme {
+        EditProfileContent(
+            profile             = previewProfile,
+            snackbarHostState   = remember { SnackbarHostState() },
+            onBack              = {},
+            onOpenAvatarViewer  = {},
+            onSaveName          = {},
+            onSaveBio           = {},
+            onSaveEmail         = {},
+            initialEditingField = EditField.BIO
         )
     }
 }

@@ -45,6 +45,26 @@ fun MemoriesScreen(
 ) {
     val months by viewModel.months.collectAsStateWithLifecycle()
 
+    MemoriesContent(
+        months          = months,
+        currentRoute    = currentRoute,
+        onNavigate      = onNavigate,
+        onOpenScrapbook = onOpenScrapbook
+    )
+}
+
+/**
+ * Stateless body — takes the month list + callbacks so it renders in @Preview
+ * without touching Firebase. MemoriesScreen above is the thin wrapper that
+ * wires the ViewModel.
+ */
+@Composable
+private fun MemoriesContent(
+    months:          List<MemoriesViewModel.MonthSection>,
+    currentRoute:    String,
+    onNavigate:      (Any) -> Unit,
+    onOpenScrapbook: (groupId: String, month: String, year: String) -> Unit
+) {
     Scaffold(
         containerColor = Cream,
         topBar = {
@@ -140,35 +160,57 @@ private fun MonthSection(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8F4EE)
+// ---------------------------------------------------------------------------
+// Previews — each one targets the whole screen at a different UI state.
+// ---------------------------------------------------------------------------
+
+private val previewMonths = listOf(
+    MemoriesViewModel.MonthSection(
+        month = "August",
+        year  = "2025",
+        scrapbooks = listOf(
+            MemoriesViewModel.Scrapbook(id = "s1", groupId = "g1", groupName = "Summer Trip",  memoryCount = 12, colorType = "brown", thumbnailUrl = ""),
+            MemoriesViewModel.Scrapbook(id = "s2", groupId = "g2", groupName = "Family",       memoryCount = 4,  colorType = "sage",  thumbnailUrl = "")
+        )
+    ),
+    MemoriesViewModel.MonthSection(
+        month = "July",
+        year  = "2025",
+        scrapbooks = listOf(
+            MemoriesViewModel.Scrapbook(id = "s3", groupId = "g1", groupName = "Summer Trip",  memoryCount = 6, colorType = "brown", thumbnailUrl = "")
+        )
+    ),
+    MemoriesViewModel.MonthSection(
+        month = "June",
+        year  = "2025",
+        scrapbooks = listOf(
+            MemoriesViewModel.Scrapbook(id = "s4", groupId = "g3", groupName = "Weekend Hike", memoryCount = 3, colorType = "brown", thumbnailUrl = ""),
+            MemoriesViewModel.Scrapbook(id = "s5", groupId = "g2", groupName = "Family",       memoryCount = 1, colorType = "sage",  thumbnailUrl = "")
+        )
+    )
+)
+
+/** Default — three months of scrapbooks across multiple groups. */
+@Preview(showBackground = true, name = "Memories · default")
 @Composable
-fun MonthSectionPreview() {
+fun MemoriesScreenPreview() {
     MemoryCircleTheme {
-        MonthSection(
-            section = MemoriesViewModel.MonthSection(
-                month = "June",
-                year  = "2025",
-                scrapbooks = listOf(
-                    MemoriesViewModel.Scrapbook(
-                        id           = "s1",
-                        groupId      = "g1",
-                        groupName    = "Summer Trip",
-                        memoryCount  = 8,
-                        colorType    = "brown",
-                        thumbnailUrl = ""
-                    )
-                )
-            ),
-            onOpenScrapbook = {}
+        MemoriesContent(
+            months          = previewMonths,
+            currentRoute    = "memories",
+            onNavigate      = {},
+            onOpenScrapbook = { _, _, _ -> }
         )
     }
 }
 
-@Preview(showBackground = true)
+/** Empty calendar — no scrapbooks exist yet. */
+@Preview(showBackground = true, name = "Memories · empty")
 @Composable
-fun MemoriesScreenPreview() {
+fun MemoriesScreenEmptyPreview() {
     MemoryCircleTheme {
-        MemoriesScreen(
+        MemoriesContent(
+            months          = emptyList(),
             currentRoute    = "memories",
             onNavigate      = {},
             onOpenScrapbook = { _, _, _ -> }
