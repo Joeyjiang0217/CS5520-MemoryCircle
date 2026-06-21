@@ -99,25 +99,48 @@ object SeedRepository {
             } catch (e: Exception) {
                 val msg = e.message ?: ""
                 if (msg.contains("already in use", ignoreCase = true)) {
-                    // Auth account exists from a prior seed run. The users
-                    // doc was likely written by an older build that
-                    // didn't know about nameLower / emailHash, so name
-                    // searches (orderBy "nameLower") would silently drop
-                    // it. Resolve the uid by display name (the only key
-                    // stable across schema versions) and merge the
-                    // missing indexed fields in.
-                    val patched = runCatching {
-                        val existingUid = lookupUidsByName(listOf(name))[name]
-                            ?: return@runCatching false
-                        db.collection("users").document(existingUid).set(mapOf(
-                            "nameLower"   to AuthRepository.nameLower(name),
-                            "emailMasked" to AuthRepository.maskEmail(email),
-                            "emailHash"   to AuthRepository.emailHash(email)
-                        ), SetOptions.merge()).await()
-                        true
-                    }.getOrDefault(false)
-                    if (patched) backfilled++
-                    skipped++
+                    // Auth account exists from a prior seed run. Three
+                    // sub-cases here:
+                    //   a) users doc exists  → merge missing indexed fields
+                    //      (covers older shapes without nameLower /
+                    //      emailHash). Counts as a skip + backfill.
+                    //   b) users doc was deleted by hand from Firestore
+                    //      Console (orphan auth) → sign in with the known
+                    //      seed password to recover the uid, then write a
+                    //      fresh users doc. Counts as a create.
+                    //   c) sign-in fails (password was changed externally,
+                    //      or some other auth error) → log the error so
+                    //      the dev sees the row didn't recover.
+                    val existingUid = lookupUidsByName(listOf(name))[name]
+                    if (existingUid != null) {
+                        val patched = runCatching {
+                            db.collection("users").document(existingUid).set(mapOf(
+                                "nameLower"   to AuthRepository.nameLower(name),
+                                "emailMasked" to AuthRepository.maskEmail(email),
+                                "emailHash"   to AuthRepository.emailHash(email)
+                            ), SetOptions.merge()).await()
+                        }.isSuccess
+                        if (patched) backfilled++
+                        skipped++
+                    } else {
+                        val rebuilt = runCatching {
+                            val signIn = auth.signInWithEmailAndPassword(email, password).await()
+                            val uid = signIn.user!!.uid
+                            db.collection("users").document(uid).set(mapOf(
+                                "uid"         to uid,
+                                "name"        to name,
+                                "nameLower"   to AuthRepository.nameLower(name),
+                                "emailMasked" to AuthRepository.maskEmail(email),
+                                "emailHash"   to AuthRepository.emailHash(email),
+                                "bio"         to "",
+                                "avatarUrl"   to "",
+                                "createdAt"   to FieldValue.serverTimestamp()
+                            )).await()
+                            auth.signOut()
+                        }
+                        if (rebuilt.isSuccess) created++
+                        else errors += "$email: orphan auth, sign-in failed (${rebuilt.exceptionOrNull()?.message ?: "unknown"})"
+                    }
                 } else errors += "$email: $msg"
             }
         }
@@ -376,8 +399,34 @@ object SeedRepository {
      */
     suspend fun acceptIncomingRequestsForTestUser(n: Int = 6): Int {
         val name = "Test User $n"
+        val me   = AuthRepository.currentUid ?: error("Not logged in")
         val byName = lookupUidsByName(listOf(name))
         val targetUid = byName[name] ?: error("$name not found — run 'Seed users' first")
+
+        // Guard 1: if we're already friends with Test User N, the sim is a
+        // no-op — but the previous behavior just returned 0 and the VM
+        // showed a misleading green "No pending requests" chip. Surface
+        // it as an explicit error instead.
+        val myFriendRef = db.collection("users").document(me)
+            .collection("friends").document(targetUid)
+        if (myFriendRef.get().await().exists()) {
+            error("Already friends with $name — nothing to accept")
+        }
+
+        // Guard 2: outgoingRequests/{target} is the authoritative "I have a
+        // live request out to this person" signal. The receiver's incoming
+        // doc isn't a reliable check — accept/decline mutate its `status`
+        // but the doc itself stays around for the See-all history view
+        // until the receiver swipes it away, so a previously-declined
+        // request still looks like it "exists". My outgoing, on the other
+        // hand, gets batch-deleted the moment the receiver actions it, so
+        // its existence == still pending. Send from AddFriendSearch first
+        // if the check fails.
+        val myOutgoingRef = db.collection("users").document(me)
+            .collection("outgoingRequests").document(targetUid)
+        if (!myOutgoingRef.get().await().exists()) {
+            error("No pending request from you to $name — send one from AddFriendSearch first")
+        }
 
         val incomingSnap = db.collection("users").document(targetUid)
             .collection("incomingRequests").get().await()
@@ -442,12 +491,46 @@ object SeedRepository {
             ?: error("$senderName not found — run 'Seed users' first")
         if (senderUid == me) error("Can't simulate a request from yourself")
 
-        val brief = AuthRepository.getUserBriefs(listOf(senderUid))[senderUid]
-
         val incomingRef = db.collection("users").document(me)
             .collection("incomingRequests").document(senderUid)
         val outgoingRef = db.collection("users").document(senderUid)
             .collection("outgoingRequests").document(me)
+        val friendRef   = db.collection("users").document(me)
+            .collection("friends").document(senderUid)
+
+        // Guard 1 — already-friends short-circuit. Mirrors the real
+        // FriendsRepository.sendFriendRequest behavior (it bails when
+        // targetUid is already in _friends). Without this the sim
+        // happily writes a PENDING incoming next to the existing friend
+        // doc, so FriendsScreen ends up showing the same person both as
+        // a friend and as an incoming request banner — exactly the
+        // inconsistent state we ran into. Delete the friend doc from
+        // Firebase Console first if you really want a fresh PENDING from
+        // this user.
+        if (friendRef.get().await().exists()) {
+            error("Already friends with $senderName — delete users/{you}/friends/$senderUid first")
+        }
+
+        // Guard 2 — existing incoming short-circuit. Any incoming doc on
+        // my side from this sender (PENDING from a previous sim, or a
+        // historical ACCEPTED/DECLINED row that the FriendsRepository
+        // accept/decline flow leaves around for the See-all history view)
+        // gets in the way. Specifically, leaving an existing doc in place
+        // turns the next `set` into an UPDATE rather than a CREATE, and
+        // NotificationsRepository's incoming listener gates the system
+        // notification on `change.type == ADDED` (so receiver-side
+        // PENDING → ACCEPTED status flips don't double-fire), so the sim
+        // would silently skip the notification even though FriendsScreen
+        // still shows the request. Force the dev to clean it up first
+        // rather than silently re-creating.
+        val existingIncoming = incomingRef.get().await()
+        if (existingIncoming.exists()) {
+            val status = existingIncoming.getString("status").orEmpty().uppercase()
+            val statusTail = if (status.isNotBlank()) " (status=$status)" else ""
+            error("Incoming doc from $senderName already exists$statusTail — action it from FriendsScreen or delete users/{you}/incomingRequests/$senderUid first")
+        }
+
+        val brief = AuthRepository.getUserBriefs(listOf(senderUid))[senderUid]
 
         db.runBatch { batch ->
             batch.set(incomingRef, mapOf(
