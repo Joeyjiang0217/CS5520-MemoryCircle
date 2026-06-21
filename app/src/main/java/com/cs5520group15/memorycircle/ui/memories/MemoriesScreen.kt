@@ -43,6 +43,15 @@ fun MemoriesScreen(
     onOpenScrapbook: (groupId: String, month: String, year: String) -> Unit,
     viewModel:       MemoriesViewModel = viewModel()
 ) {
+    // Re-bind on every screen entry — heals a couple of failure modes that
+    // otherwise leave the calendar empty:
+    //   1) The VM was constructed before Firebase Auth had restored the
+    //      session, so init's loadMonths() bailed and never came back.
+    //   2) A previous group was deleted while Memories was offscreen and the
+    //      cascading delete tripped a permission_denied on the now-orphan
+    //      scrapbooks listener, which then silently died.
+    LaunchedEffect(Unit) { viewModel.bind() }
+
     val months by viewModel.months.collectAsStateWithLifecycle()
 
     MemoriesContent(

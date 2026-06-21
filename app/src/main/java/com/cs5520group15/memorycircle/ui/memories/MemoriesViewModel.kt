@@ -66,7 +66,50 @@ class MemoriesViewModel : ViewModel() {
     private val thumbnailCache = mutableMapOf<String, Pair<Long, String>>()
     private val monthFormatter = DateTimeFormatter.ofPattern("MMMM", Locale.ENGLISH)
 
-    init { loadMonths() }
+    /**
+     * What: Called by MemoriesScreen's LaunchedEffect on every entry. Always
+     *       tears down the existing listener tree and re-attaches fresh
+     *       listeners for the current signed-in uid. This is intentionally
+     *       unconditional because a non-null `groupsListener` does NOT mean
+     *       the underlying Firestore subscription is still alive.
+     *
+     *       Concrete failure mode we ran into:
+     *         1. User deletes a group from GroupDetail.
+     *         2. GroupRepository.deleteGroup is a cascading delete — children
+     *            (scrapbooks, posts, members) are batched first, then the
+     *            group doc itself.
+     *         3. The scrapbookListener watching `groups/{oldId}/scrapbooks`
+     *            re-runs the security rule each event; once the group doc is
+     *            gone, `groupDoc(gid).memberIds` fails the rule, the server
+     *            detaches the subscription and sends a single error event,
+     *            and we silently swallow it via `if (err != null) return`.
+     *            The ListenerRegistration object is still non-null but the
+     *            subscription is dead. The shared gRPC connection used by the
+     *            sibling groupsListener takes the hit too — new groups don't
+     *            propagate until the next app start.
+     *         4. User creates a new group + seeds: Firestore writes succeed,
+     *            GroupDetail (which spins up a *fresh* listener on entry)
+     *            shows them, but Memories' dead listeners stay silent.
+     *
+     *       Re-binding on every screen entry costs nothing visible (Firestore
+     *       client cache hydrates the new listener instantly) and guarantees
+     *       we recover from this and any similar listener-died state.
+     * Who: Called from MemoriesScreen's LaunchedEffect(Unit) on every entry.
+     * When: Each time the screen enters composition.
+     */
+    fun bind() {
+        detachAll()
+        loadMonths()
+    }
+
+    private fun detachAll() {
+        groupsListener?.remove()
+        groupsListener = null
+        scrapbookListeners.values.forEach { it.remove() }
+        scrapbookListeners.clear()
+        groupScrapbooks.clear()
+        groupMeta.clear()
+    }
 
     private fun loadMonths() {
         val uid = AuthRepository.currentUid ?: return
@@ -181,12 +224,7 @@ class MemoriesViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        groupsListener?.remove()
-        groupsListener = null
-        scrapbookListeners.values.forEach { it.remove() }
-        scrapbookListeners.clear()
-        groupScrapbooks.clear()
-        groupMeta.clear()
+        detachAll()
         thumbnailCache.clear()
     }
 }

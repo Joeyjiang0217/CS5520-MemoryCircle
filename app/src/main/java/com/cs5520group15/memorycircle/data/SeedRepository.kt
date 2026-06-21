@@ -193,9 +193,18 @@ object SeedRepository {
             val exists = sbRef.get().await().exists()
             if (exists) continue
 
+            // Match the real seedTestPost flow: scrapbook doc lands first with
+            // postCount=0, then posts, then a final increment to the true
+            // count. MemoriesViewModel caches the latest-post thumbnail keyed
+            // on postCount — if we'd written postCount=2 up-front the listener
+            // would fire while the posts subcollection was still empty, cache
+            // an empty thumbnail against postCount=2, and never re-fetch
+            // because the count never changes again. GroupDetail didn't show
+            // the bug because its VM only binds when the user opens the
+            // screen, well after all the seed writes have settled.
             sbRef.set(mapOf(
                 "scrapbookId" to sbId,
-                "postCount"   to 2,
+                "postCount"   to 0,
                 "createdAt"   to FieldValue.serverTimestamp(),
                 "updatedAt"   to FieldValue.serverTimestamp()
             )).await()
@@ -224,6 +233,12 @@ object SeedRepository {
                     "createdAt"    to FieldValue.serverTimestamp()
                 )).await()
             }
+
+            // Now that both posts exist, bump postCount to 2. This second
+            // write fires the scrapbooks listener with the new count, busts
+            // the thumbnail cache, and triggers fetchLatestPostThumbnail to
+            // re-resolve against the now-populated posts subcollection.
+            sbRef.update("postCount", FieldValue.increment(2L)).await()
 
             written++
         }
