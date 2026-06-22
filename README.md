@@ -5,9 +5,100 @@ monthly "scrapbook" of photos. Members of a group contribute time points
 (photo + caption) to the current month's scrapbook, browse past months, and
 manage their friend graph and group memberships from a single navigation hub.
 
-This README is a screen-by-screen walkthrough of the app. Every screen is
-shown with the screenshot from `ui screens/`, in the order a user actually
-encounters them.
+---
+
+## Demo Walkthrough
+
+### Demo account
+
+For this walkthrough we'll use **`a@test.com`** with password **`123456`**.
+This is an **admin account** — a few of the actions on the **Dev Tools**
+screen are gated to admin users (you can verify the restriction by registering
+a fresh regular account, but for the full feature tour we strongly recommend
+signing in with the admin account).
+
+### 1. Launch and login
+
+When you launch the app, you'll see our **custom splash screen** — the
+Memory Circle logo with a short text animation — before the app routes you to
+the **Login** screen.
+
+Enter `a@test.com / 123456` and tap **Log In**. You'll land on the **Home**
+screen. The admin account starts out with **no groups**, but it already has
+one default friend — **Test User 1** — pre-added so we can immediately create
+a group with someone.
+
+### 2. Create your first group
+
+Tap the **create group** action on Home, give the group a name, and add
+**Test User 1** as a member. The group is created and now shows up on the
+Home screen.
+
+### 3. Seed memories from Dev Tools
+
+Open **Profile → Settings → Dev Tools**.
+
+- Tap **Seed test post** — a freshly seeded post is inserted into the current
+  month's scrapbook of the group you just created. Pop back into that group
+  and you'll see your own seeded post on the timeline.
+- Tap **Seed history** — the past three months of scrapbooks are created for
+  the same group, each pre-populated with two seeded posts. Combined with
+  this month, that's **four scrapbooks total**, and all four also appear on
+  the **Memories** tab as monthly cover thumbnails.
+
+### 4. Add a friend via search
+
+Open the **Friends** screen and use the **Add friend** search. Type "**test**"
+— every test user shows up in the results. Find **Test User 6** and tap
+**Add**; an invitation is sent.
+
+Back in **Dev Tools**, tap **Accept for Test User 6**. This impersonates Test
+User 6 and accepts the request you just sent, so the friendship becomes real.
+Test User 6 now appears in your **Friends** list. The Friends screen also
+shows **every group you belong to**, so the group you created in step 2 is
+listed here as well.
+
+### 5. Seed and clear test-user profiles
+
+Still in **Dev Tools**:
+
+- Tap **Seed profiles** — every test user (1–10) gets a themed bio plus a
+  stock photo avatar served from Firebase Storage. Go back to the **Friends**
+  screen, and you'll see the default Sage-letter avatars replaced with real
+  photos and the bios filled in.
+- Tap **Clear profiles** — the bio and avatar are blanked, and the Friends
+  screen falls back to the default letter avatars. (Running clear → seed is a
+  nice way to demo the cross-device refresh.)
+
+### 6. Notification simulations
+
+The remaining Dev Tools buttons simulate real-world activity. **Notifications
+are on by default**, so each action also pushes a system notification on the
+device.
+
+- **Simulate friend request** — Test User 8 sends you a friend request. You
+  receive a **friend-request notification**. Open the **Friends** screen,
+  find the incoming-request row, and tap **Accept** — Test User 8 is now in
+  your friends list.
+- **Simulate group invite** — Test User 8 creates a new group and adds you
+  to it. You receive a **group-invite notification**, and back on the
+  **Home** screen the new group appears.
+- **Simulate new post**, **Simulate new photo**, **Simulate new comment** —
+  Test User 8 publishes a post in that sim group's current-month scrapbook,
+  then appends a second photo to that same post, then leaves a comment on
+  it. You receive **three separate notifications**, and the sim group's
+  scrapbook ends up with **one post containing two photos and one comment**.
+- **Simulate Test User 10 joining** — Test User 10 joins the group you
+  created back in step 2. Because you're the owner of that group, you
+  receive a **new-member notification**.
+
+---
+
+## Screen-by-Screen Reference
+
+The rest of this README is a screen-by-screen walkthrough of the app. Every
+screen is shown with the screenshot from `ui screens/`, in the order a user
+actually encounters them.
 
 ---
 

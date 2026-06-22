@@ -113,7 +113,7 @@ fun DevToolsScreen(
 
             SeedSection(
                 title       = "Decorate test users",
-                description = "Patches a themed bio + a stable picsum avatar URL onto every test user (1-10@test.com) so member lists, group avatar collages, and friend rows don't all show the same Sage letter. Also upgrades any old-shape doc to the new public shape (emailMasked).",
+                description = "Patches a themed bio + a stable Firebase Storage avatar URL onto every test user (1-10@test.com) so member lists, group avatar collages, and friend rows don't all show the same Sage letter. Also upgrades any old-shape doc to the new public shape (emailMasked).",
                 buttonLabel = "Seed profiles",
                 state       = profilesState,
                 onRun       = { viewModel.seedProfiles() }

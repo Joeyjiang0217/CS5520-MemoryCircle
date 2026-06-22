@@ -53,6 +53,56 @@ object SeedRepository {
 
     private val db: FirebaseFirestore get() = FirebaseModule.db
 
+    /**
+     * Stock photos uploaded to Firebase Storage at `seed_photos/{i}.{ext}` by
+     * `scripts/upload_seed_photos.py`. Every seed/simulate function that needs
+     * a stable image URL picks from this list.
+     *
+     * Why these and not picsum.photos seeds: picsum was flaky on the team's
+     * network — Coil would cache the failed origin fetch and leave permanent
+     * white boxes in the timeline. Firebase download URLs ship with a token
+     * that bypasses Storage rules for reads, so anyone who can reach Firebase
+     * gets the image on first try.
+     */
+    private val SEED_PHOTO_URLS: List<String> = listOf(
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F0.jpg?alt=media&token=35eb68ee-be83-4bac-b6e5-dd57ac984e6a",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F1.avif?alt=media&token=922a4a65-b880-47c1-b1bd-860e970dce55",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F2.jpg?alt=media&token=67d07d22-e4eb-4879-a1c2-791572a36d14",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F3.jpg?alt=media&token=a12eaf43-d91e-4322-9cad-c3c1f47aae9c",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F4.webp?alt=media&token=b5142f04-0645-484c-a89e-520dc9c0221b",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F5.jpg?alt=media&token=13dc1c73-c1f2-43d2-ab9d-5f489c47de3e",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F6.jpg?alt=media&token=0155ed12-3ee6-407e-a189-9b73dfc454d5",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F7.jpg?alt=media&token=b45b1866-1ae7-40dc-937a-d9dc24c54f57",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F8.jpg?alt=media&token=3a717a5f-5db5-4602-ab69-e5bed343a2c8",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F9.jpg?alt=media&token=216c7c30-9fd5-4caf-8f6d-381ea7e2528c",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F10.jpg?alt=media&token=cf47eede-9f8e-4685-b2fc-36331c4ae5c0",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F11.jpg?alt=media&token=172291b9-3c04-42e6-b535-508566cdabd1",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F12.webp?alt=media&token=1ebe6091-48cc-4a59-b626-ca77d333284b",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F13.jpg?alt=media&token=bf4a4efd-0b43-424d-a2e6-65082bcd3190",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F14.webp?alt=media&token=2247ea28-d1d9-4303-8b4d-66aded00afdc",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F15.jpg?alt=media&token=1f71f1ec-fdde-4d2b-83bf-7ddcfbda6234",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F16.webp?alt=media&token=8052372b-933e-4980-a807-310406c3d58a",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F17.jpg?alt=media&token=33b63bca-e88c-4b18-9569-795dbca36ec2",
+        "https://firebasestorage.googleapis.com/v0/b/cs5520-group15-memorycircle.firebasestorage.app/o/seed_photos%2F18.jpg?alt=media&token=64732b93-066d-4222-824d-0b558370d9e5"
+    )
+
+    private fun seedPhotoUrl(slot: Int): String =
+        SEED_PHOTO_URLS[slot.mod(SEED_PHOTO_URLS.size)]
+
+    /**
+     * Returns the stable seed-photo URL `seedHistoricalScrapbooks` writes for
+     * the past month at `monthsAgo` with the given `idx` (each historical
+     * month writes two posts at idx 0 and idx 1).
+     *
+     * The (monthsAgo, idx) shape is shared with simulateNewPostByTestUser /
+     * simulateNewPhotoByTestUser so a sim post visually reuses a historical
+     * image — handy when demoing alongside a fresh Seed-history run.
+     */
+    private fun historicalSeedPhotoUrl(monthsAgo: Long, idx: Int): String {
+        val slot = (monthsAgo.toInt().coerceAtLeast(1) - 1) * 2 + idx
+        return seedPhotoUrl(slot)
+    }
+
     data class SeedReport(
         val createdUsers:    Int,
         val skippedUsers:    Int,
@@ -176,7 +226,7 @@ object SeedRepository {
             "tags"         to listOf("#seed", "#test"),
             "photos"       to listOf(mapOf(
                 "photoId"     to UUID.randomUUID().toString(),
-                "url"         to "https://picsum.photos/seed/${postId}/600/400",
+                "url"         to seedPhotoUrl(6),
                 "storagePath" to "",
                 "description" to "This is a seeded test post (no real upload).",
                 "uploaderId"  to uid,
@@ -246,7 +296,7 @@ object SeedRepository {
                     "tags"         to listOf("#${ym.month.name.lowercase()}"),
                     "photos"       to listOf(mapOf(
                         "photoId"     to UUID.randomUUID().toString(),
-                        "url"         to "https://picsum.photos/seed/${sbId}_${idx}/600/400",
+                        "url"         to historicalSeedPhotoUrl(offset.toLong(), idx),
                         "storagePath" to "",
                         "description" to "Historical seed for $sbId",
                         "uploaderId"  to uid,
@@ -320,9 +370,10 @@ object SeedRepository {
 
     /**
      * For users 1@test.com .. 10@test.com (whichever exist), sets a themed bio
-     * + a stable picsum avatar URL so the demo screens don't all show the same
-     * Sage letter blob. Also upgrades any old-shape doc to the new public
-     * shape: writes `emailMasked` and removes the leftover `email` field.
+     * + a stable Firebase Storage avatar URL (from SEED_PHOTO_URLS) so the demo
+     * screens don't all show the same Sage letter blob. Also upgrades any
+     * old-shape doc to the new public shape: writes `emailMasked` and removes
+     * the leftover `email` field.
      *
      * Every avatar/name change is fanned out to groups/{gid}/members/{uid} so
      * member listings on other devices refresh without a restart, exactly the
@@ -338,7 +389,7 @@ object SeedRepository {
             val number = n.substringAfterLast(' ')
             val email     = "$number@test.com"
             val bio       = "I'm $n — auto-seeded from Dev Tools."
-            val avatarUrl = "https://picsum.photos/seed/testuser_$number/200/200"
+            val avatarUrl = seedPhotoUrl(8 + (number.toIntOrNull() ?: 0))
 
             db.collection("users").document(uid).set(mapOf(
                 "bio"         to bio,
@@ -695,7 +746,10 @@ object SeedRepository {
             "tags"         to emptyList<String>(),
             "photos"       to listOf(mapOf(
                 "photoId"     to UUID.randomUUID().toString(),
-                "url"         to "https://picsum.photos/seed/${postId}/600/400",
+                // Same image seedHistoricalScrapbooks would pick for the
+                // post three months back at idx 0 — visually the sim
+                // post matches a historical one if both are seeded.
+                "url"         to historicalSeedPhotoUrl(monthsAgo = 3, idx = 0),
                 "storagePath" to "",
                 "description" to "Simulated post by Test User $n",
                 "uploaderId"  to authorUid,
@@ -732,7 +786,10 @@ object SeedRepository {
         val photos = (snap.get("photos") as? List<Map<String, Any?>>).orEmpty()
         val newPhoto = mapOf(
             "photoId"     to UUID.randomUUID().toString(),
-            "url"         to "https://picsum.photos/seed/sim_${System.currentTimeMillis()}/600/400",
+            // Pick a *different* historical slot (2 months back, idx 1)
+            // so the added photo doesn't visually duplicate the cover
+            // photo of the sim post.
+            "url"         to historicalSeedPhotoUrl(monthsAgo = 2, idx = 1),
             "storagePath" to "",
             "description" to "Simulated new photo by Test User $n",
             "uploaderId"  to authorUid,
