@@ -60,19 +60,43 @@ service cloud.firestore {
 
       // Friend list. Each entry is doc-id-keyed by the OTHER uid.
       //   - owner manages their own list (add/remove)
-      //   - the "other side" can write its own mirror row, which lets
-      //     deleteFriend tear down both sides and acceptIncomingRequests
-      //     create both sides in a single batch — gated on an ACCEPTED
-      //     incoming request so a malicious client can't unilaterally inject
-      //     themselves into someone's friends list
+      //   - the "other side" can write its own mirror row, gated by two
+      //     OR'd consent proofs:
+      //
+      //     Cond 1 — `exists(users/{uid}/outgoingRequests/{friendUid})`
+      //       This says "the list owner (uid) has a live outgoing request
+      //       to me (friendUid, the caller)". outgoingRequests docs are
+      //       created by `sendFriendRequest` and batch-deleted by the
+      //       receiver's `accept` / `decline` flows — they are NEVER
+      //       updated, so their existence is the authoritative "request
+      //       still pending" signal. This is the path that lets a single
+      //       accept() batch succeed for non-developer receivers: at
+      //       rule-evaluation time the receiver hasn't deleted the
+      //       outgoing yet (deletes in the same batch are invisible to
+      //       the rule's pre-batch snapshot), so the cross-write into
+      //       the sender's friends list passes.
+      //
+      //     Cond 2 — `exists(users/{uid}/incomingRequests/{friendUid}).status == 'ACCEPTED'`
+      //       This is the after-the-fact safety net: "I (friendUid) sent
+      //       uid a request, uid accepted it, and now (some time later)
+      //       I want to mirror-write my own side of the friendship into
+      //       uid's list". The status check is LOAD-BEARING here — if we
+      //       dropped it, the rule would allow A to write themselves
+      //       into B's friend list the instant they call sendFriendRequest
+      //       (incomingRequests doc exists in PENDING state at that
+      //       moment), without B's consent.
+      //
       //   - dev override keeps the DevTools "Seed friendships" flow alive
       match /friends/{friendUid} {
         allow read: if isMe(uid) || isDeveloper();
 
         allow create: if isMe(uid)
                    || (isMe(friendUid)
-                       && exists(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid))
-                       && get(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid)).data.status == 'ACCEPTED')
+                       && (
+                           exists(/databases/$(database)/documents/users/$(uid)/outgoingRequests/$(friendUid))
+                           || (exists(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid))
+                               && get(/databases/$(database)/documents/users/$(uid)/incomingRequests/$(friendUid)).data.status == 'ACCEPTED')
+                       ))
                    || isDeveloper();
 
         allow delete: if isMe(uid) || isMe(friendUid) || isDeveloper();
