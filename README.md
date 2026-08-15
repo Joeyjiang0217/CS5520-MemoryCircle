@@ -1,424 +1,340 @@
 # MemoryCircle
 
-A collaborative Android app for small friend / family groups to build a shared
-monthly "scrapbook" of photos. Members of a group contribute time points
-(photo + caption) to the current month's scrapbook, browse past months, and
-manage their friend graph and group memberships from a single navigation hub.
+A collaborative Android app for small friend and family groups to build a shared
+monthly **scrapbook** of photos. Members contribute time points — a photo plus a
+caption — to the current month's scrapbook, browse every past month, and manage
+their friend graph and group memberships from a single navigation hub.
+
+Built with **Kotlin + Jetpack Compose**, backed by **Firebase Auth, Cloud
+Firestore, and Cloud Storage**.
+
+🎥 **Demo video:** _[add your YouTube link here]_
 
 ---
 
-## Demo Walkthrough
+## Team & my contributions
 
-### Demo account
+This was a **2-person team project** (Northeastern CS5520, June 2026 — 58 commits
+over 12 days). This repository is my copy of the team codebase.
 
-For this walkthrough we'll use **`a@test.com`** with password **`123456`**.
-This is an **admin account** — a few of the actions on the **Dev Tools**
-screen are gated to admin users (you can verify the restriction by registering
-a fresh regular account, but for the full feature tour we strongly recommend
-signing in with the admin account).
+| Contributor | Main areas |
+| --- | --- |
+| **[@Joeyjiang0217](https://github.com/Joeyjiang0217)** (me) | Firebase data layer, security rules, Friends / Groups / Profile features, notification engine |
+| [@Rena-jin](https://github.com/Rena-jin) | Design system, splash animation, app chrome, first-pass mock-data screens |
 
-### 1. Launch and login
+**What I built** (35 of 58 commits; **13,050 of the 16,187 Kotlin lines surviving
+at HEAD, ~81%**, measured by `git blame`):
 
-When you launch the app, you'll see our **custom splash screen** — the
-Memory Circle logo with a short text animation — before the app routes you to
-the **Login** screen.
+- **The entire Firebase data layer** — 9 repositories (`Auth`, `Friends`,
+  `FriendsSearch`, `Group`, `Profile`, `Scrapbook`, `Notifications`,
+  `NotificationSettings`, `Seed`) plus the Firebase module wiring, a typed
+  `Result` wrapper, and network-state handling
+- **The six-phase migration** from mock data sources to live Firestore, done
+  screen group by screen group so the app stayed runnable throughout
+- **[`firestore.rules`](firestore.rules)** — 198 lines of authorization covering
+  the full nested document tree, including the asymmetric friend-request rules
+  that stop one user from writing themselves into someone else's friend list
+- **Three feature verticals end to end** — Friends (search, requests, the
+  accept/decline state machine), Groups (creation, membership, invites, the
+  scrapbook timeline), and Profile (view, edit, avatar upload to Cloud Storage)
+- **The realtime notification engine** — Firestore listeners that raise local
+  system notifications, with per-channel user preferences
+- **This README**
 
-Enter `a@test.com / 123456` and tap **Log In**. You'll land on the **Home**
-screen. The admin account starts out with **no groups**, but it already has
-one default friend — **Test User 1** — pre-added so we can immediately create
-a group with someone.
-
-### 2. Create your first group
-
-Tap the **create group** action on Home, give the group a name, and add
-**Test User 1** as a member. The group is created and now shows up on the
-Home screen.
-
-### 3. Seed memories from Dev Tools
-
-Open **Profile → Settings → Dev Tools**.
-
-- Tap **Seed test post** — a freshly seeded post is inserted into the current
-  month's scrapbook of the group you just created. Pop back into that group
-  and you'll see your own seeded post on the timeline.
-- Tap **Seed history** — the past three months of scrapbooks are created for
-  the same group, each pre-populated with two seeded posts. Combined with
-  this month, that's **four scrapbooks total**, and all four also appear on
-  the **Memories** tab as monthly cover thumbnails.
-
-### 4. Add a friend via search
-
-Open the **Friends** screen and use the **Add friend** search. Type "**test**"
-— every test user shows up in the results. Find **Test User 6** and tap
-**Add**; an invitation is sent.
-
-Back in **Dev Tools**, tap **Accept for Test User 6**. This impersonates Test
-User 6 and accepts the request you just sent, so the friendship becomes real.
-Test User 6 now appears in your **Friends** list. The Friends screen also
-shows **every group you belong to**, so the group you created in step 2 is
-listed here as well.
-
-### 5. Seed and clear test-user profiles
-
-Still in **Dev Tools**:
-
-- Tap **Seed profiles** — every test user (1–10) gets a themed bio plus a
-  stock photo avatar served from Firebase Storage. Go back to the **Friends**
-  screen, and you'll see the default Sage-letter avatars replaced with real
-  photos and the bios filled in.
-- Tap **Clear profiles** — the bio and avatar are blanked, and the Friends
-  screen falls back to the default letter avatars. (Running clear → seed is a
-  nice way to demo the cross-device refresh.)
-
-### 6. Notification simulations
-
-The remaining Dev Tools buttons simulate real-world activity. **Notifications
-are on by default**, so each action also pushes a system notification on the
-device.
-
-- **Simulate friend request** — Test User 8 sends you a friend request. You
-  receive a **friend-request notification**. Open the **Friends** screen,
-  find the incoming-request row, and tap **Accept** — Test User 8 is now in
-  your friends list.
-- **Simulate group invite** — Test User 8 creates a new group and adds you
-  to it. You receive a **group-invite notification**, and back on the
-  **Home** screen the new group appears.
-- **Simulate new post**, **Simulate new photo**, **Simulate new comment** —
-  Test User 8 publishes a post in that sim group's current-month scrapbook,
-  then appends a second photo to that same post, then leaves a comment on
-  it. You receive **three separate notifications**, and the sim group's
-  scrapbook ends up with **one post containing two photos and one comment**.
-- **Simulate Test User 10 joining** — Test User 10 joins the group you
-  created back in step 2. Because you're the owner of that group, you
-  receive a **new-member notification**.
+**What I did not build** — all of the following is [@Rena-jin](https://github.com/Rena-jin)'s:
+the design system (colour palette, typography, theming), the launch-screen
+animation, the bottom navigation bar and top app bar, the first mock-data
+versions of the Home / Login / Register / Scrapbook / Memories screens, the
+project-level KDoc pass, and the two test stubs.
 
 ---
 
-## Screen-by-Screen Reference
+## Screens
 
-The rest of this README is a screen-by-screen walkthrough of the app. Every
-screen is shown with the screenshot from `ui screens/`, in the order a user
-actually encounters them.
+The app has **22 screens**, all Jetpack Compose — there are **zero XML layouts**
+and **zero Java files** in the project.
 
----
+### Auth
 
-## 1. Auth
+`LoginScreen` · `RegisterScreen`
 
-### LoginScreen
-The app launches on **LoginScreen**. Existing users sign in with email and
-password. Tapping **Create Account** opens RegisterScreen.
+The app launches on **Login**. Existing users sign in with email and password;
+**Create Account** opens the registration form. On success the back stack is
+cleared up to Login, so the system Back button never returns the user to a form
+they have already completed.
 
-<img src="ui%20screens/loginScreen.png" width="280" alt="Login screen" />
+<img src="ui%20screens/loginScreen.png" width="240" alt="Login screen" /> <img src="ui%20screens/registerScreen.png" width="240" alt="Register screen" />
 
-### RegisterScreen
-**RegisterScreen** is the new-account form (name, email, password). On
-successful registration the back stack is cleared and the user lands directly
-on Home (so the system Back button does not return to the form).
+### Home & groups
 
-<img src="ui%20screens/registerScreen.png" width="280" alt="Register screen" />
+`HomeScreen` · `NewGroupScreen` · `ScrapbookViewerScreen` · `ScrapbookScreen`
 
----
+**Home** lists every group the user belongs to, with a "+" FAB that opens the
+contact picker for a new group.
 
-## 2. Home tab
+<img src="ui%20screens/homeScreen.png" width="240" alt="Home screen listing the user's groups" /> <img src="ui%20screens/newGroupScreen.png" width="240" alt="New group contact picker" />
 
-### HomeScreen
-After login the user lands on **HomeScreen** — a list of every group they
-belong to, plus a "+" FAB for creating a new group.
+Opening a group lands on **ScrapbookViewer** — that group's live collaborative
+timeline for the current month, where each row is one time point contributed by
+one member. Both "Add photo" on an existing entry and the "+" FAB open
+**ScrapbookScreen**, the single time-point editor; the difference is whether the
+new photo joins an existing time point or creates a new one.
 
-<img src="ui%20screens/homeScreen.png" width="280" alt="Home screen" />
+<img src="ui%20screens/scrapbookViewerScreen.png" width="240" alt="Group scrapbook timeline for the current month" /> <img src="ui%20screens/scrapbookScreen.png" width="240" alt="Time point editor with photo and caption" />
 
-### ScrapbookViewerScreen
-Tapping **Group 1** opens **ScrapbookViewerScreen**, that group's live
-collaborative timeline for the current month. Each row is one time point — a
-photo + caption contributed by one member.
+`GroupDetailScreen` · `GroupMembersScreen` · `InviteNewMemberScreen`
 
-<img src="ui%20screens/scrapbookViewerScreen.png" width="280" alt="Scrapbook viewer screen" />
+The hamburger icon opens **GroupDetail**, the group's settings and history hub:
+a member thumbnail grid, an invite action, the per-month scrapbook list, and two
+separate routes out of the group. **GroupMembers** is the full alphabetical
+roster; tapping any member opens their read-only profile.
 
-### ScrapbookScreen
-From the viewer you can contribute in two ways, both of which open
-**ScrapbookScreen** (the single time-point editor):
-- Tapping **Add photo** on an existing entry → join that time point with your
-  own photo + description.
-- Tapping the **"+"** floating button → create a brand-new time point for the
-  current month.
+<img src="ui%20screens/groupDetailScreen.png" width="240" alt="Group detail with members and month history" /> <img src="ui%20screens/groupMembersScreen.png" width="240" alt="Full group member roster" />
 
-<img src="ui%20screens/scrapbookScreen.png" width="280" alt="Scrapbook editor screen" />
+**InviteNewMember** is the create-group contact picker re-used in invite mode —
+the title and CTA flip, and the confirm action wires the selected users into the
+existing group instead of minting a new one. A brand-new group has no records
+yet, so it renders the empty state.
 
-### GroupDetailScreen
-Tapping the **三 (hamburger)** icon at the top-right of the timeline opens
-**GroupDetailScreen** — the group's settings + history hub. The top-right
-icon here and the red **Leave group** button at the bottom both let the user
-leave the group.
+<img src="ui%20screens/inviteNewMemberScreen.png" width="240" alt="Invite new member picker" /> <img src="ui%20screens/emptyScrapbookHistoryScreen.png" width="240" alt="Empty state for a group with no memories yet" />
 
-<img src="ui%20screens/groupDetailScreen.png" width="280" alt="Group detail screen" />
+### Memories
 
-### GroupMembersScreen
-Tapping **View all** on the members section opens **GroupMembersScreen**, the
-full alphabetical roster for this group.
+`MemoriesScreen` · `ScrapbookHistryScreen`
 
-<img src="ui%20screens/groupMembersScreen.png" width="280" alt="Group members screen" />
+**Memories** is a read-only calendar of past months across *all* of the user's
+groups, rendered as monthly cover thumbnails. Tapping a month opens
+**ScrapbookHistry** for that group, month, and year.
 
-### MemberProfileScreen (from GroupMembers)
-Tapping any user in the roster opens **MemberProfileScreen** — the read-only
-profile view for any user other than the current one.
+The history screen is deliberately a reduced version of the live viewer: no "Add
+photo", no FAB, no menu icon. Past months are records, so only viewing is
+supported.
 
-<img src="ui%20screens/memberProfileScreen.png" width="280" alt="Member profile screen" />
+<img src="ui%20screens/memoriesScreen.png" width="240" alt="Memories calendar of past months" /> <img src="ui%20screens/scrapbookHistryScreen.png" width="240" alt="Read-only past-month scrapbook" />
 
-### MemberProfileScreen (from GroupDetail thumbnails)
-Going back to GroupDetailScreen, tapping any of the **member thumbnail
-avatars** in the grid also opens that user's MemberProfileScreen — the same
-destination, reached from a different surface.
+### Friends
 
-### InviteNewMemberScreen
-Back on GroupDetailScreen, tapping **Invite** opens
-**InviteNewMemberScreen**. (Under the hood this is the CreateGroup contact
-picker re-used in invite mode — the top-bar title and CTA label flip, and the
-confirm action wires the new members back into the existing group instead of
-minting a new one.)
+`FriendsScreen` · `FriendsSearchScreen` · `AddFriendScreen` · `AddFriendSearchScreen` · `AllFriendRequestsScreen` · `MemberProfileScreen`
 
-<img src="ui%20screens/inviteNewMemberScreen.png" width="280" alt="Invite new member screen" />
+**Friends** is the friend-graph hub — it lists both friends and every group the
+user belongs to. Its hero search bar opens a full-screen overlay that fuzzy
+matches friends by name or email *and* groups by name.
 
-### ScrapbookHistryScreen
-Back on GroupDetailScreen, the per-month scrapbook list at the bottom shows
-every past month for this group. Tapping a past month opens
-**ScrapbookHistryScreen**.
+<img src="ui%20screens/FriendsScreen.png" width="240" alt="Friends hub" /> <img src="ui%20screens/friendsSearchScreen.png" width="240" alt="Combined friend and group search overlay" />
 
-Compared to ScrapbookViewerScreen, the history screen is missing **Add
-photo**, the **"+"** floating button, and the top-right **三** icon — because
-these are historical records, only viewing is supported.
+Adding a friend is a separate two-step flow: **AddFriend** holds a tap-only
+search bar, which opens **AddFriendSearch**, an active overlay with an
+auto-focused field that searches people only.
 
-<img src="ui%20screens/scrapbookHistryScreen.png" width="280" alt="Scrapbook history screen" />
+<img src="ui%20screens/addFriendScreen.png" width="240" alt="Add friend landing screen" /> <img src="ui%20screens/addFriendSearchScreen.png" width="240" alt="Active people search" />
 
-### NewGroupScreen
-Returning to HomeScreen, tapping the **"+"** FAB opens **NewGroupScreen** —
-the contact picker for choosing initial members of a brand-new group.
+**AllFriendRequests** shows every request in all three states — pending,
+accepted, declined — with per-row swipe-to-dismiss. Any user row anywhere in the
+app leads to the same read-only **MemberProfile**.
 
-<img src="ui%20screens/newGroupScreen.png" width="280" alt="New group screen" />
+<img src="ui%20screens/allFriendRequestsScreen.png" width="240" alt="All friend requests with per-row dismiss" /> <img src="ui%20screens/memberProfileScreen.png" width="240" alt="Read-only member profile" />
 
-### EmptyScrapbookHistoryScreen
-Tapping **Create now** mints the group and drops the user into the new
-group's ScrapbookViewer. Because the new group has zero memory records yet,
-it renders the empty / initial state — **EmptyScrapbookHistoryScreen**.
+### Profile & settings
 
-<img src="ui%20screens/emptyScrapbookHistoryScreen.png" width="280" alt="Empty scrapbook history screen" />
+`ProfileScreen` · `EditProfileScreen` · `SettingScreen` · `NotificationSettingsScreen`
+
+**Profile** is the user's own card; **EditProfile** is a tap-to-edit form for
+avatar, name, bio, and email, with the avatar uploading to Cloud Storage.
+
+<img src="ui%20screens/profileScreen.png" width="240" alt="Own profile card" /> <img src="ui%20screens/editProfileScreen.png" width="240" alt="Edit profile form" />
+
+**Settings** is the account hub, and **NotificationSettings** holds the
+per-channel toggles that the notification engine reads before raising anything.
+
+<img src="ui%20screens/settingScreen.png" width="240" alt="Settings hub" /> <img src="ui%20screens/notificationSettingsScreen.png" width="240" alt="Per-channel notification toggles" />
 
 ---
 
-## 3. Memories tab
+## Features
 
-### MemoriesScreen
-**MemoriesScreen** is a read-only calendar of past months across all of the
-user's groups.
-
-<img src="ui%20screens/memoriesScreen.png" width="280" alt="Memories screen" />
-
-Tapping a month entry opens **ScrapbookHistryScreen** for that group / month /
-year — the same read-only view reached from GroupDetail.
-
-<img src="ui%20screens/scrapbookHistryScreen.png" width="280" alt="Scrapbook history screen" />
-
----
-
-## 4. Friends tab
-
-### FriendsScreen
-**FriendsScreen** is the friend graph hub.
-
-<img src="ui%20screens/FriendsScreen.png" width="280" alt="Friends screen" />
-
-### AddFriendScreen
-Tapping the **add-friend icon** at the top-right opens **AddFriendScreen** —
-the landing page for the "add a new friend" flow. It holds only a tap-only
-search bar.
-
-<img src="ui%20screens/addFriendScreen.png" width="280" alt="Add friend screen" />
-
-### AddFriendSearchScreen
-Tapping the search bar on AddFriendScreen opens **AddFriendSearchScreen**,
-the active search overlay with an auto-focused text field. Results are people
-only.
-
-<img src="ui%20screens/addFriendSearchScreen.png" width="280" alt="Add friend search screen" />
-
-### FriendsSearchScreen
-Back on FriendsScreen, tapping the hero **search bar** opens
-**FriendsSearchScreen** — a full-screen overlay that fuzzy-matches both
-friends (by name or email) and groups (by name).
-
-<img src="ui%20screens/friendsSearchScreen.png" width="280" alt="Friends search screen" />
-
-### AllFriendRequestsScreen
-Back on FriendsScreen, tapping **See all** in the FRIEND REQUESTS section
-opens **AllFriendRequestsScreen**, which shows every request
-(pending / accepted / declined) and supports per-row swipe-to-dismiss.
-
-<img src="ui%20screens/allFriendRequestsScreen.png" width="280" alt="All friend requests screen" />
-
-Tapping any user row in this list opens that user's **MemberProfileScreen**.
-
-### MemberProfileScreen (from FriendsScreen)
-Back on FriendsScreen, tapping any user row in the friends list also opens
-that user's **MemberProfileScreen** — the same read-only profile destination.
-
-<img src="ui%20screens/memberProfileScreen.png" width="280" alt="Member profile screen" />
+- 📸 **Shared monthly scrapbooks** — every group gets one scrapbook per month,
+  built collaboratively from member-contributed photo + caption time points
+- 🗓 **Month history** — past scrapbooks stay browsable per group, and across all
+  groups from the Memories calendar
+- 👥 **Friend graph** — search by name or email, request / accept / decline, with
+  the full request history kept
+- 🏠 **Groups** — create, invite, browse the roster, leave; ownership decides who
+  can delete
+- 🔔 **Realtime alerts** — Firestore listeners raise local system notifications
+  for requests, invites, posts, photos, comments, and new members
+- 🖼 **Cloud-backed media** — photos and avatars upload to Firebase Cloud Storage
+- 🧭 **State-preserving tabs** — each of the four tabs keeps its own scroll
+  position and back stack
 
 ---
 
-## 5. Profile tab
+## Tech stack
 
-### ProfileScreen
-**ProfileScreen** is the current user's own profile card.
-
-<img src="ui%20screens/profileScreen.png" width="280" alt="Profile screen" />
-
-### EditProfileScreen
-Tapping **Edit Profile** opens **EditProfileScreen** — a form with rows for
-avatar, name, bio, and email; each row is tap-to-edit.
-
-<img src="ui%20screens/editProfileScreen.png" width="280" alt="Edit profile screen" />
-
-### SettingScreen
-Back on ProfileScreen, tapping **Settings** opens **SettingScreen** — the
-account settings hub.
-
-<img src="ui%20screens/settingScreen.png" width="280" alt="Settings screen" />
-
-### EditProfileScreen (from Settings)
-Tapping the **Profile** row on SettingScreen opens **EditProfileScreen**
-again — the same destination reached from ProfileScreen.
-
-### NotificationSettingsScreen
-Tapping the **Notifications** row on SettingScreen opens
-**NotificationSettingsScreen**, which holds the per-channel notification
-toggles.
-
-<img src="ui%20screens/notificationSettingsScreen.png" width="280" alt="Notification settings screen" />
+| Layer | Choice |
+| --- | --- |
+| Language | Kotlin 2.2.10 — 16,178 lines across 88 files, **0 Java** |
+| UI | **Jetpack Compose only** (Compose BOM 2026.02.01, Material 3) — 219 `@Composable` functions, **0 XML layouts** |
+| Navigation | Navigation Compose 2.9.0 — one `NavHost`, 22 destinations |
+| Architecture | MVVM — 17 ViewModels over 9 repositories |
+| Auth | Firebase Authentication (email / password) |
+| Database | Cloud Firestore, with realtime snapshot listeners |
+| Media | Firebase Cloud Storage · Coil 2.6.0 for image loading |
+| Notifications | `NotificationCompat` — **local only**, see below |
+| Build | AGP 9.2.1 · Gradle Kotlin DSL · Firebase BOM 34.14.1 |
+| SDK | `compileSdk` 37 · `targetSdk` 36 · `minSdk` 28 (Android 9) |
 
 ---
 
-## 6. Navigation map
-
-The whole UI interaction graph, rooted at the single NavHost:
+## Architecture
 
 ```text
-[MemoryCircleNavigation]  (Owns the NavHost + bottom-nav state)
-       │
-       ▼
-   [NavHost]  startDestination = Login
-       │
-       ├─► [LoginScreen]
-       │      ├─ onLoginSuccess() ─────────► [HomeScreen]   (clears stack up to Login)
-       │      └─ onNavigateToRegister() ───► [RegisterScreen]
-       │
-       ├─► [RegisterScreen]
-       │      ├─ onRegisterSuccess() ──────► [HomeScreen]   (clears stack up to Login)
-       │      └─ onNavigateToLogin() ──────► back
-       │
-       ├─► [HomeScreen]                                    ◄── bottom-nav tab
-       │      ├─ onCreateGroup() ──────────► [NewGroupScreen]        (CreateGroup, default mode)
-       │      └─ onOpenGroup(groupId) ─────► [ScrapbookViewerScreen]
-       │
-       ├─► [ScrapbookViewerScreen]
-       │      ├─ onOpenGroupDetail() ──────► [GroupDetailScreen]
-       │      ├─ onAddTimePoint() ─────────► [ScrapbookScreen]       (new entry)
-       │      └─ onJoinEntry(entryId) ─────► [ScrapbookScreen]       (join existing entry)
-       │
-       ├─► [ScrapbookScreen]
-       │      ├─ onBack() ─────────────────► back
-       │      └─ onSaved() ────────────────► back
-       │
-       ├─► [ScrapbookHistryScreen]    (read-only: no add / no FAB / no menu)
-       │      └─ onBack() ─────────────────► back
-       │
-       ├─► [NewGroupScreen]   (CreateGroup, default mode)
-       │      ├─ onCreated(newGroupId) ────► [EmptyScrapbookHistoryScreen]
-       │      │                              (ScrapbookViewer empty state, picker popped)
-       │      └─ onBack() ─────────────────► back
-       │
-       ├─► [InviteNewMemberScreen]    (CreateGroup, invite mode)
-       │      ├─ onInvite() ───────────────► back to [GroupDetailScreen]
-       │      └─ onBack() ─────────────────► back
-       │
-       ├─► [GroupDetailScreen]
-       │      ├─ onOpenAllMembers() ───────► [GroupMembersScreen]
-       │      ├─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]   (thumbnail tap)
-       │      ├─ onInviteMember() ─────────► [InviteNewMemberScreen]
-       │      ├─ onOpenScrapbook(m, y) ────► [ScrapbookHistryScreen]
-       │      └─ onLeaveGroup() ───────────► back (top-bar icon / red "Leave group")
-       │
-       ├─► [GroupMembersScreen]
-       │      └─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]
-       │
-       ├─► [MemoriesScreen]                                ◄── bottom-nav tab
-       │      └─ onOpenScrapbook(g, m, y) ─► [ScrapbookHistryScreen]
-       │
-       ├─► [FriendsScreen]                                 ◄── bottom-nav tab
-       │      ├─ onOpenSearch() ───────────► [FriendsSearchScreen]
-       │      ├─ onOpenAddFriend() ────────► [AddFriendScreen]
-       │      ├─ onOpenAllRequests() ──────► [AllFriendRequestsScreen]
-       │      ├─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]
-       │      └─ onOpenGroupDetail(gid) ───► [GroupDetailScreen]
-       │
-       ├─► [FriendsSearchScreen]
-       │      ├─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]
-       │      └─ onOpenGroupDetail(gid) ───► [GroupDetailScreen]
-       │
-       ├─► [AddFriendScreen]
-       │      └─ onOpenSearch() ───────────► [AddFriendSearchScreen]
-       │
-       ├─► [AddFriendSearchScreen]
-       │      └─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]
-       │
-       ├─► [AllFriendRequestsScreen]
-       │      └─ onOpenMemberProfile(uid) ─► [MemberProfileScreen]
-       │
-       ├─► [MemberProfileScreen]
-       │      └─ onBack() ─────────────────► back
-       │
-       ├─► [ProfileScreen]                                 ◄── bottom-nav tab
-       │      ├─ onOpenEditProfile() ──────► [EditProfileScreen]
-       │      └─ onOpenSettings() ─────────► [SettingScreen]
-       │
-       ├─► [EditProfileScreen]
-       │      └─ onOpenAvatarViewer() ─────► [AvatarViewerScreen]
-       │
-       ├─► [SettingScreen]
-       │      ├─ onOpenProfile() ──────────► [EditProfileScreen]
-       │      ├─ onOpenNotificationSettings() ─► [NotificationSettingsScreen]
-       │      └─ onLogout() ───────────────► [LoginScreen]   (entire stack cleared)
-       │
-       └─► [NotificationSettingsScreen]
-              └─ onBack() ─────────────────► back
-```
-
-The four bottom-nav destinations — Home, Memories, Friends, Profile — share a
-single bottom bar. Tab switches use `popUpTo(start) { saveState = true }`
-together with `launchSingleTop` and `restoreState`, so each tab keeps its own
-scroll position and the back stack stays shallow.
-
----
-
-## Project layout
-
-```
 app/src/main/java/com/cs5520group15/memorycircle/
-├── data/            Repositories + mock data sources
-├── model/           Plain data classes (Profile, Friend, Member, …)
+├── data/            9 repositories + FirebaseModule, Result, NetworkUtil,
+│                    NotificationService
+├── model/           Plain data classes (Profile, Friend, Member, Scrapbook,
+│                    NotificationSettings)
 └── ui/
-    ├── navigation/  Destinations + NavHost
-    ├── common/      Shared composables (buttons, rows, dialogs, …)
-    ├── theme/       Colors, typography
-    └── <feature>/   One folder per screen, each with Screen + ViewModel
+    ├── navigation/  Destinations + the single NavHost
+    ├── common/      Shared composables (buttons, rows, dialogs)
+    ├── theme/       Colours, typography
+    └── <feature>/   One package per screen — Screen + ViewModel
 ```
 
-Every screen above lives in its own `ui/<feature>/` package, paired with a
-ViewModel where state is non-trivial. Repositories under `data/` back the
-ViewModels; pure data classes live under `model/`.
+Screens never touch Firebase directly. State flows one way:
+
+```text
+Composable  →  ViewModel  →  Repository  →  Firebase SDK  →  Firestore / Storage
+```
+
+A few things worth calling out:
+
+- **Repositories return a typed `Result`.** `data/Result.kt` gives every call one
+  success/failure shape, so ViewModels branch on one type instead of catching
+  Firebase exceptions at the UI layer.
+- **Realtime by default.** Most reads are Firestore snapshot listeners rather
+  than one-shot gets, so a change made on one device shows up on another without
+  a refresh — this is what makes the shared scrapbook feel collaborative.
+- **Notifications are local.** `NotificationService` raises `NotificationCompat`
+  notifications from those same Firestore listeners. There is **no
+  `firebase-messaging` dependency and no FCM** anywhere in the project — nothing
+  is delivered while the app is not running.
+- **One picker, two modes.** The create-group contact picker and the invite
+  picker are the same composable behind a mode flag.
+- **Tab state survives switching.** The four bottom-nav destinations use
+  `popUpTo(start) { saveState = true }` with `launchSingleTop` and
+  `restoreState`, keeping the back stack shallow.
+- **A `devtools` package** seeds test data and simulates inbound activity. It is
+  development scaffolding for demoing the realtime paths, not a user feature.
 
 ---
 
-## Running
+## Data model
 
-Open the project in Android Studio (Giraffe or newer), let Gradle sync, then
-run the `app` configuration on an emulator or physical device. The app starts
-at LoginScreen — create an account via Register or sign in to land on Home.
+Cloud Firestore, modelled as a nested document tree rather than flat
+collections — the nesting is what lets the security rules express "members of
+this group, and only them" in one place.
+
+```text
+users/{uid}
+├── friends/{friendUid}
+├── incomingRequests/{fromUid}
+└── outgoingRequests/{toUid}
+
+groups/{gid}
+├── members/{memberUid}
+└── scrapbooks/{sid}
+    └── posts/{pid}
+        └── comments/{cid}
+```
+
+| Collection | Contents |
+| --- | --- |
+| `users/{uid}` | Display name, email, bio, avatar URL |
+| `users/{uid}/friends/{friendUid}` | One document per confirmed friendship, written on both sides |
+| `users/{uid}/incomingRequests/{fromUid}` | Pending / accepted / declined requests received |
+| `users/{uid}/outgoingRequests/{toUid}` | The mirror of the above, for requests sent |
+| `groups/{gid}` | Group name, owner, `memberIds` array used by the read rule |
+| `groups/{gid}/members/{memberUid}` | Per-member record within a group |
+| `groups/{gid}/scrapbooks/{sid}` | One scrapbook per group per month |
+| `.../scrapbooks/{sid}/posts/{pid}` | One time point — caption plus one or more photos |
+| `.../posts/{pid}/comments/{cid}` | Comments on a time point |
+
+### Security rules
+
+[`firestore.rules`](firestore.rules) is 198 lines built on six helper functions —
+`isAuth`, `isMe`, `isDeveloper`, `groupDoc`, `isGroupMember`, `isGroupOwner`.
+
+Group content inherits one rule: you can read and write a group's members,
+scrapbooks, posts, and comments **iff** you are a member of that group, and only
+the owner can delete it. Friend requests are the interesting case — the rules are
+deliberately asymmetric, so that accepting a request cannot be used by one user
+to write themselves into another user's friend list.
+
+---
+
+## Getting started
+
+Requires **Android Studio** (Giraffe or newer) and **JDK 17**.
+
+This project needs a Firebase backend of your own — the committed
+`google-services.json` points at the original course project, which you will not
+have access to:
+
+1. Create a Firebase project, and add an Android app with the package name
+   `com.cs5520group15.memorycircle`.
+2. Enable **Authentication** (Email/Password), **Cloud Firestore**, and **Cloud
+   Storage**.
+3. Download your own `google-services.json` into `app/`, replacing the committed
+   one.
+4. Deploy the rules: `firebase deploy --only firestore:rules`.
+5. Put your own Firebase UID into the `isDeveloper()` allowlist in
+   `firestore.rules` if you want the Dev Tools actions.
+
+Then open the project, let Gradle sync, and run the `app` configuration on an
+emulator or device. Register an account from the app to reach Home.
+
+---
+
+## Testing
+
+**There is effectively no automated test coverage, and I want to be straight
+about that.** The project has exactly two test files, both of them the stubs
+Android Studio generates with a new project:
+
+| File | What it asserts |
+| --- | --- |
+| `ExampleUnitTest.kt` | `assertEquals(4, 2 + 2)` |
+| `ExampleInstrumentedTest.kt` | That the package name is `com.cs5520group15.memorycircle` |
+
+Neither exercises a single line of application code. Verification during the
+build was manual, driven by the `devtools` seeding and simulation actions against
+a live Firebase project. Retrofitting real repository tests behind a fake
+Firestore is the first thing this project needs.
+
+---
+
+## Project status & limitations
+
+A **two-week course project**, not a shipped product:
+
+- **Not deployed.** No Play Store release, no real users, no CI.
+- **No push notifications.** Alerts are local `NotificationCompat` notifications
+  raised by in-process Firestore listeners. Without FCM, nothing arrives while
+  the app is not running — calling this "push" would be wrong.
+- **No offline support.** Beyond Firestore's own default local cache, there is no
+  offline strategy and no conflict handling.
+- **Two template tests only** — see above. No coverage figure can honestly be
+  quoted for this project.
+- **Firebase secrets are committed.** `app/google-services.json` and a hardcoded
+  Web API key in `scripts/upload_seed_photos.py` are in the history; the rules
+  also carry two real developer UIDs. These are scoped to a dead course project,
+  but they should be rotated before this repository is made public.
+- **Minor AI assistance.** One of my commits on the application code carries a
+  `Co-Authored-By` trailer; this README was drafted with AI help as well.
+
+### If I kept going
+
+- Repository-level tests against a Firestore emulator
+- FCM, so notifications work with the app closed
+- Pagination on the scrapbook timeline — it currently loads a whole month
+- Image compression before upload
