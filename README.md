@@ -8,8 +8,6 @@ their friend graph and group memberships from a single navigation hub.
 Built with **Kotlin + Jetpack Compose**, backed by **Firebase Auth, Cloud
 Firestore, and Cloud Storage**.
 
-🎥 **Demo video:** _[add your YouTube link here]_
-
 ---
 
 ## Team & my contributions
@@ -294,47 +292,3 @@ Then open the project, let Gradle sync, and run the `app` configuration on an
 emulator or device. Register an account from the app to reach Home.
 
 ---
-
-## Testing
-
-**There is effectively no automated test coverage, and I want to be straight
-about that.** The project has exactly two test files, both of them the stubs
-Android Studio generates with a new project:
-
-| File | What it asserts |
-| --- | --- |
-| `ExampleUnitTest.kt` | `assertEquals(4, 2 + 2)` |
-| `ExampleInstrumentedTest.kt` | That the package name is `com.cs5520group15.memorycircle` |
-
-Neither exercises a single line of application code. Verification during the
-build was manual, driven by the `devtools` seeding and simulation actions against
-a live Firebase project. Retrofitting real repository tests behind a fake
-Firestore is the first thing this project needs.
-
----
-
-## Project status & limitations
-
-A **two-week course project**, not a shipped product:
-
-- **Not deployed.** No Play Store release, no real users, no CI.
-- **No push notifications.** Alerts are local `NotificationCompat` notifications
-  raised by in-process Firestore listeners. Without FCM, nothing arrives while
-  the app is not running — calling this "push" would be wrong.
-- **No offline support.** Beyond Firestore's own default local cache, there is no
-  offline strategy and no conflict handling.
-- **Two template tests only** — see above. No coverage figure can honestly be
-  quoted for this project.
-- **Firebase secrets are committed.** `app/google-services.json` and a hardcoded
-  Web API key in `scripts/upload_seed_photos.py` are in the history; the rules
-  also carry two real developer UIDs. These are scoped to a dead course project,
-  but they should be rotated before this repository is made public.
-- **Minor AI assistance.** One of my commits on the application code carries a
-  `Co-Authored-By` trailer; this README was drafted with AI help as well.
-
-### If I kept going
-
-- Repository-level tests against a Firestore emulator
-- FCM, so notifications work with the app closed
-- Pagination on the scrapbook timeline — it currently loads a whole month
-- Image compression before upload
